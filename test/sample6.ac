@@ -1,6 +1,6 @@
 i a
 f b
-i c
+f c
 i d
 
 a = 1
@@ -8,7 +8,7 @@ b = 2.1
 c = 1
 d = 4
 
-c = a * d
+c = a + d + 2 + 1
 b = 3.3
 
 p c
