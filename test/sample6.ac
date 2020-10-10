@@ -1,14 +1,15 @@
-i a
-f b
-f c
+i abde
+f bvvv
+i c
 i d
 
-a = 1
-b = 2.1
+abde = 1
+bvvv = 2.1
 c = 1
 d = 4
 
-c = a + d + 2 + 1
-b = 3.3
+c = abde + d + 2 + 1
+bvvv = 3.3
+d = e
 
 p c

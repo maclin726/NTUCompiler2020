@@ -81,13 +81,14 @@ Token getNumericToken( FILE *source, char c )
 
 Token scanner( FILE *source )
 {
-    char c;
+    char c, next_c;
     Token token;
 
     while( !feof(source) ){
         c = fgetc(source);
 
         while( isspace(c) ) c = fgetc(source);
+        
 
         if( isdigit(c) )
             return getNumericToken(source, c);
@@ -95,14 +96,31 @@ Token scanner( FILE *source )
         token.tok[0] = c;
         token.tok[1] = '\0';
         if( islower(c) ){
-            if( c == 'f' )
-                token.type = FloatDeclaration;
-            else if( c == 'i' )
+        	next_c = fgetc(source);
+            if( c == 'f' && !islower(next_c))
+            	token.type = FloatDeclaration;
+            else if( c == 'i' && !islower(next_c))
                 token.type = IntegerDeclaration;
-            else if( c == 'p' )
+            else if( c == 'p' && !islower(next_c)) {
+            	ungetc(next_c, source);
                 token.type = PrintOp;
-            else
+            }
+            else {
                 token.type = Alphabet;
+                int i = 1;
+                while(islower(next_c)){
+                	token.tok[i++] = next_c;
+                	next_c = fgetc(source);
+                }
+                token.tok[i] = '\0';
+                if(strlen(token.tok) >= MAXNAMELEN) {
+                	printf("Syntax Error: The length of id is too long.\n");
+                	exit(1);
+                }
+                //fprintf(stderr, "next_c = (%c)\n", next_c);
+                ungetc(next_c, source);
+                //fprintf(stderr, "token: %s\n", token.tok);
+            }
             return token;
         }
 
@@ -174,7 +192,8 @@ Declarations *parseDeclarations( FILE *source )
             return makeDeclarationTree( decl, decls );
         case PrintOp:
         case Alphabet:
-            ungetc(token.tok[0], source);
+        	for(int i = strlen(token.tok) - 1; i >= 0; i--)
+        		ungetc(token.tok[i], source);
             return NULL;
         case EOFsymbol:
             return NULL;
@@ -193,7 +212,7 @@ Expression *parseValue( FILE *source )
     switch(token.type){
         case Alphabet:
             (value->v).type = Identifier;
-            (value->v).val.id = token.tok[0];
+            strcpy((value->v).val.id, token.tok);
             break;
         case IntValue:
             (value->v).type = IntConst;
@@ -233,7 +252,8 @@ Expression *parseExpressionTail( FILE *source, Expression *lvalue )
             return parseExpressionTail(source, expr);
         case Alphabet:
         case PrintOp:
-            ungetc(token.tok[0], source);
+            for(int i = strlen(token.tok) - 1; i >= 0; i--)
+        		ungetc(token.tok[i], source);
             return lvalue;
         case EOFsymbol:
             return lvalue;
@@ -265,7 +285,8 @@ Expression *parseExpression( FILE *source, Expression *lvalue )
             return parseExpressionTail(source, expr);
         case Alphabet:
         case PrintOp:
-            ungetc(token.tok[0], source);
+            for(int i = strlen(token.tok) - 1; i >= 0; i--)
+        		ungetc(token.tok[i], source);
             return NULL;
         case EOFsymbol:
             return NULL;
@@ -286,7 +307,7 @@ Statement parseStatement( FILE *source, Token token )
             if(next_token.type == AssignmentOp){
                 value = parseValue(source);
                 expr = parseExpression(source, value);
-                return makeAssignmentNode(token.tok[0], value, expr);
+                return makeAssignmentNode(token.tok, value, expr);
             }
             else{
                 printf("Syntax Error: Expect an assignment op %s\n", next_token.tok);
@@ -295,7 +316,7 @@ Statement parseStatement( FILE *source, Token token )
         case PrintOp:
             next_token = scanner(source);
             if(next_token.type == Alphabet)
-                return makePrintNode(next_token.tok[0]);
+                return makePrintNode(next_token.tok);
             else{
                 printf("Syntax Error: Expect an identifier %s\n", next_token.tok);
                 exit(1);
@@ -346,7 +367,8 @@ Declaration makeDeclarationNode( Token declare_type, Token identifier )
         default:
             break;
     }
-    tree_node.name = identifier.tok[0];
+
+    strcpy(tree_node.name, identifier.tok);
 
     return tree_node;
 }
@@ -361,13 +383,13 @@ Declarations *makeDeclarationTree( Declaration decl, Declarations *decls )
 }
 
 
-Statement makeAssignmentNode( char id, Expression *v, Expression *expr_tail )
+Statement makeAssignmentNode( char *id, Expression *v, Expression *expr_tail )
 {
     Statement stmt;
     AssignmentStatement assign;
 
     stmt.type = Assignment;
-    assign.id = id;
+    strcpy(assign.id, id);
     if(expr_tail == NULL)
         assign.expr = v;
     else
@@ -377,11 +399,11 @@ Statement makeAssignmentNode( char id, Expression *v, Expression *expr_tail )
     return stmt;
 }
 
-Statement makePrintNode( char id )
+Statement makePrintNode( char *id )
 {
     Statement stmt;
     stmt.type = Print;
-    stmt.stmt.variable = id;
+    strcpy(stmt.stmt.variable, id);
 
     return stmt;
 }
@@ -410,20 +432,31 @@ Program parser( FILE *source )
 /********************************************************
   Build symbol table
  *********************************************************/
+
+int hash( char *name )
+{
+	char c;
+	int i = 0, hashValue = 0;
+
+	while((c = name[i++]) != '\0')
+		hashValue = (hashValue * 27 + c - 'a' + 1) % HASHTABLESIZE;
+	return hashValue;
+}
+
 void InitializeTable( SymbolTable *table )
 {
     int i;
 
-    for(i = 0 ; i < 26; i++)
+    for(i = 0 ; i < HASHTABLESIZE; i++)
         table->table[i] = Notype;
 }
 
-void add_table( SymbolTable *table, char c, DataType t )
+void add_table( SymbolTable *table, char *name, DataType t )
 {
-    int index = (int)(c - 'a');
+    int index = hash(name);
 
     if(table->table[index] != Notype)
-        printf("Error : id %c has been declared\n", c);//error
+        printf("Error : id %s has been declared\n", name);//error or collision
     table->table[index] = t;
 }
 
@@ -458,7 +491,7 @@ void convertType( Expression * old, DataType type )
     if(old->type == Int && type == Float){
         Expression *tmp = (Expression *)malloc( sizeof(Expression) );
         if(old->v.type == Identifier)
-            printf("convert to float %c \n",old->v.val.id);
+            printf("convert to float %s \n",old->v.val.id);
         else
             printf("convert to float %d \n", old->v.val.ivalue);
         tmp->v = old->v;
@@ -486,23 +519,23 @@ DataType generalize( Expression *left, Expression *right )
     return Int;
 }
 
-DataType lookup_table( SymbolTable *table, char c )
+DataType lookup_table( SymbolTable *table, char *name )
 {
-    int id = c-'a';
-    if( table->table[id] != Int && table->table[id] != Float)
-        printf("Error : identifier %c is not declared\n", c);//error
-    return table->table[id];
+    int index = hash(name);
+    if( table->table[index] != Int && table->table[index] != Float)
+        printf("Error : identifier %s is not declared\n", name);//error
+    return table->table[index];
 }
 
 void checkexpression( Expression * expr, SymbolTable * table )
 {
-    char c;
+    char name[MAXNAMELEN];
     if(expr->leftOperand == NULL && expr->rightOperand == NULL){
         switch(expr->v.type){
             case Identifier:
-                c = expr->v.val.id;
-                printf("identifier : %c\n",c);
-                expr->type = lookup_table(table, c);
+                strcpy(name, expr->v.val.id);
+                printf("identifier : %s\n",name);
+                expr->type = lookup_table(table, name);
                 break;
             case IntConst:
                 printf("constant : int\n");
@@ -535,7 +568,7 @@ void checkstmt( Statement *stmt, SymbolTable * table )
 {
     if(stmt->type == Assignment){
         AssignmentStatement assign = stmt->stmt.assign;
-        printf("assignment : %c \n",assign.id);
+        printf("assignment : %s \n",assign.id);
         checkexpression(assign.expr, table);
         stmt->stmt.assign.type = lookup_table(table, assign.id);
         if (assign.expr->type == Float && stmt->stmt.assign.type == Int) {
@@ -545,7 +578,7 @@ void checkstmt( Statement *stmt, SymbolTable * table )
         }
     }
     else if (stmt->type == Print){
-        printf("print : %c \n",stmt->stmt.variable);
+        printf("print : %s \n",stmt->stmt.variable);
         lookup_table(table, stmt->stmt.variable);
     }
     else printf("error : statement error\n");//error
@@ -585,7 +618,7 @@ void fprint_expr( FILE *target, Expression *expr)
     if(expr->leftOperand == NULL){
         switch( (expr->v).type ){
             case Identifier:
-                fprintf(target,"l%c\n",(expr->v).val.id);
+                fprintf(target,"l%s\n",(expr->v).val.id);
                 break;
             case IntConst:
                 fprintf(target,"%d\n",(expr->v).val.ivalue);
@@ -620,7 +653,7 @@ void gencode(Program prog, FILE * target)
         stmt = stmts->first;
         switch(stmt.type){
             case Print:
-                fprintf(target,"l%c\n",stmt.stmt.variable);
+                fprintf(target,"l%s\n",stmt.stmt.variable);
                 fprintf(target,"p\n");
                 break;
             case Assignment:
@@ -632,7 +665,7 @@ void gencode(Program prog, FILE * target)
                    else if(stmt.stmt.assign.type == Float){
                    fprintf(target,"5 k\n");
                    }*/
-                fprintf(target,"s%c\n",stmt.stmt.assign.id);
+                fprintf(target,"s%s\n",stmt.stmt.assign.id);
                 fprintf(target,"0 k\n");
                 break;
         }
