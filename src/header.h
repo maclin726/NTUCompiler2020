@@ -20,7 +20,6 @@ typedef enum StmtType { Print, Assignment } StmtType;
 typedef enum ValueType { Identifier, IntConst, FloatConst, PlusNode, MinusNode, MulNode, DivNode, IntToFloatConvertNode } ValueType;
 typedef enum Operation { Plus, Minus, Mul, Div, Assign, IntToFloatConvert } Operation;
 
-
 /**************************************************************************************** 
    All structures to facilitate the processes of 
    scanning, parsing, AST, type-checking, building the symbol table, and code generation.
@@ -64,7 +63,6 @@ typedef struct Value{
         float fvalue;              /* for float constant */
     }val;
 }Value;
-
 
 /* 
    The data structure of the expression tree.

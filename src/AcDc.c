@@ -32,6 +32,7 @@ int main( int argc, char *argv[] )
     }
     else{
         printf("Usage: %s source_file target_file\n", argv[0]);
+        exit(2);
     }
 
 
@@ -117,9 +118,7 @@ Token scanner( FILE *source )
                 	printf("Syntax Error: The length of id is too long.\n");
                 	exit(1);
                 }
-                //fprintf(stderr, "next_c = (%c)\n", next_c);
                 ungetc(next_c, source);
-                //fprintf(stderr, "token: %s\n", token.tok);
             }
             return token;
         }
@@ -324,39 +323,10 @@ Expression *parseExpressionTail( FILE *source, Expression *lvalue )
 
 Expression *parseExpression( FILE *source)
 {
-    //Token token = scanner(source);
     Expression *term, *R1;
     term = parseTerm(source);
     R1 = parseExpressionTail(source, term);
     return R1;
-
-    /*switch(token.type){
-        case PlusOp:
-            expr = (Expression *)malloc( sizeof(Expression) );
-            (expr->v).type = PlusNode;
-            (expr->v).val.op = Plus;
-            expr->leftOperand = lvalue;
-            expr->rightOperand = parseValue(source);
-            return parseExpressionTail(source, expr);
-        case MinusOp:
-            expr = (Expression *)malloc( sizeof(Expression) );
-            (expr->v).type = MinusNode;
-            (expr->v).val.op = Minus;
-            expr->leftOperand = lvalue;
-            expr->rightOperand = parseValue(source);
-            return parseExpressionTail(source, expr);
-
-        case Alphabet:
-        case PrintOp:
-            for(int i = strlen(token.tok) - 1; i >= 0; i--)
-        		ungetc(token.tok[i], source);
-            return NULL;
-        case EOFsymbol:
-            return NULL;
-        default:
-            printf("Syntax Error: Expect a numeric value or an identifier %s\n", token.tok);
-            exit(1);
-    }*/
 }
 
 Statement parseStatement( FILE *source, Token token )
@@ -522,7 +492,10 @@ void add_table( SymbolTable *table, char *name, DataType t )
 
     while(table->table[index] != Notype) {
     	index = (index + 1) % HASHTABLESIZE;
-        //printf("Error : id %s has been declared\n", name);//error or collision
+    	if(strcmp(table->symbolName[index], name) == 0) {
+        	printf("Error : id %s has been declared\n", name);//error or collision
+        	exit(1);
+    	}
     }
     table->table[index] = t;
     table->symbolName[index] = (char *)malloc(sizeof(char) * MAXNAMELEN);
@@ -556,13 +529,13 @@ void convertType( Expression * old, DataType type )
 {
     if(old->type == Float && type == Int){
         printf("error : can't convert float to integer\n");
-        return;
+        exit(1);
     }
     if(old->type == Int && type == Float){
         Expression *tmp = (Expression *)malloc( sizeof(Expression) );
         if(old->v.type == Identifier)
             printf("convert to float %s \n",old->v.val.id);
-        else
+        else if(old->v.type == IntConst)
             printf("convert to float %d \n", old->v.val.ivalue);
         tmp->v = old->v;
         tmp->leftOperand = old->leftOperand;
@@ -573,7 +546,7 @@ void convertType( Expression * old, DataType type )
         v.type = IntToFloatConvertNode;
         v.val.op = IntToFloatConvert;
         old->v = v;
-        old->type = Int;
+        old->type = Float;
         old->leftOperand = tmp;
         old->rightOperand = NULL;
     }
@@ -604,9 +577,68 @@ DataType lookup_table( SymbolTable *table, char *name )
     	index = i;
     else {
     	printf("Error : identifier %s is not declared\n", name);//error
-    	return Notype;
+    	exit(1);
     }        
     return table->table[index];
+}
+
+int constFolding( Expression * expr, DataType type )
+{
+	Expression *left = expr->leftOperand;
+    Expression *right = expr->rightOperand;
+    if((left->v.type != IntConst && left->v.type != FloatConst)
+    	|| (right->v.type != IntConst && right->v.type != FloatConst))
+    	return 0;
+
+    expr->type = type;
+    if(type == Int) {
+    	switch(expr->v.type) {
+    		case PlusNode:
+    			expr->v.val.ivalue = left->v.val.ivalue + right->v.val.ivalue;
+    			break;
+    		case MinusNode:
+    			expr->v.val.ivalue = left->v.val.ivalue - right->v.val.ivalue;
+    			break;
+    		case MulNode:
+    			expr->v.val.ivalue = left->v.val.ivalue * right->v.val.ivalue;
+    			break;
+    		case DivNode:
+    			expr->v.val.ivalue = left->v.val.ivalue / right->v.val.ivalue;
+    			break;
+    		default:
+    			break;
+    	}
+    	expr->v.type = IntConst;
+    }
+    else{
+    	float lvalue, rvalue;
+
+    	lvalue = (left->v.type == IntConst)? left->v.val.ivalue : left->v.val.fvalue;
+    	rvalue = (right->v.type == IntConst)? right->v.val.ivalue : right->v.val.fvalue;
+
+    	switch(expr->v.type) {
+    		case PlusNode:
+    			expr->v.val.fvalue = lvalue + rvalue;
+    			break;
+    		case MinusNode:
+    			expr->v.val.fvalue = lvalue - rvalue;
+    			break;
+    		case MulNode:
+    			expr->v.val.fvalue = lvalue * rvalue;
+    			break;
+    		case DivNode:
+    			expr->v.val.fvalue = lvalue / rvalue;
+    			break;
+    		default:
+    			break;
+    	}
+    	expr->v.type = FloatConst;
+    }
+    free(left);
+    free(right);
+    expr->leftOperand = NULL;
+    expr->rightOperand = NULL;
+    return 1;
 }
 
 void checkexpression( Expression * expr, SymbolTable * table )
@@ -640,6 +672,8 @@ void checkexpression( Expression * expr, SymbolTable * table )
         checkexpression(right, table);
 
         DataType type = generalize(left, right);
+        if(constFolding(expr, type))
+        	return;
         convertType(left, type);//left->type = type;//converto
         convertType(right, type);//right->type = type;//converto
         expr->type = type;
@@ -655,6 +689,7 @@ void checkstmt( Statement *stmt, SymbolTable * table )
         stmt->stmt.assign.type = lookup_table(table, assign.id);
         if (assign.expr->type == Float && stmt->stmt.assign.type == Int) {
             printf("error : can't convert float to integer\n");
+            exit(1);
         } else {
             convertType(assign.expr, stmt->stmt.assign.type);
         }
@@ -663,7 +698,10 @@ void checkstmt( Statement *stmt, SymbolTable * table )
         printf("print : %s \n",stmt->stmt.variable);
         lookup_table(table, stmt->stmt.variable);
     }
-    else printf("error : statement error\n");//error
+    else{
+    	printf("error : statement error\n");//error
+    	exit(1);
+    }
 }
 
 void check( Program *program, SymbolTable * table )
@@ -708,8 +746,8 @@ void fprint_op( FILE *target, ValueType op )
         	fprintf(target,"/\n");
             break;
         default:
-            fprintf(target,"Error in fprintf_op ValueType = %d\n",op);
-            break;
+            //fprintf(target,"Error in fprintf_op ValueType = %d\n",op);
+            exit(1);
     }
 }
 
@@ -728,8 +766,8 @@ void fprint_expr( FILE *target, Expression *expr, SymbolTable * table)
                 fprintf(target,"%f\n", (expr->v).val.fvalue);
                 break;
             default:
-                fprintf(target,"Error In fprint_left_expr. (expr->v).type=%d\n",(expr->v).type);
-                break;
+                //fprintf(target,"Error In fprint_left_expr. (expr->v).type=%d\n",(expr->v).type);
+                exit(1);
         }
     }
     else{
