@@ -27,7 +27,7 @@ typedef enum Operation { Plus, Minus, Mul, Div, Assign, IntToFloatConvert } Oper
 *****************************************************************************************/
 
 #define MAXNAMELEN 65
-#define HASHTABLESIZE 65536 // 26 => 65536
+#define HASHTABLESIZE 23 // 26 => 65536 => 23
 
 /* For scanner */
 typedef struct Token{
@@ -76,6 +76,7 @@ typedef struct Expression{
     struct Expression *leftOperand;
     struct Expression *rightOperand;
     DataType type;
+    // int parCnt; // the # of parentheses
 }Expression;
 
 
@@ -111,6 +112,7 @@ typedef struct Program{
 /* For building the symbol table */
 typedef struct SymbolTable{
     DataType table[HASHTABLESIZE];
+    char *symbolName[HASHTABLESIZE];
 } SymbolTable;
 
 
@@ -139,8 +141,8 @@ void checkexpression( Expression * expr, SymbolTable * table );
 void checkstmt( Statement *stmt, SymbolTable * table );
 void check( Program *program, SymbolTable * table);
 void fprint_op( FILE *target, ValueType op );
-void fprint_expr( FILE *target, Expression *expr );
-void gencode( Program prog, FILE * target );
+void fprint_expr( FILE *target, Expression *expr, SymbolTable * table );
+void gencode( Program prog, FILE * target, SymbolTable symtab );
 
 void print_expr( Expression *expr );
 void test_parser( FILE *source );
