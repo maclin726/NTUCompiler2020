@@ -140,6 +140,12 @@ Token scanner( FILE *source )
             case '/':
                 token.type = DivOp;
                 return token;
+            case '(':
+            	token.type = LeftPar;
+            	return token;
+            case ')':
+            	token.type = RightPar;
+            	return token;
             case EOF:
                 token.type = EOFsymbol;
                 token.tok[0] = '\0';
@@ -203,53 +209,106 @@ Declarations *parseDeclarations( FILE *source )
     }
 }
 
-Expression *parseValue( FILE *source )
+Expression *parseFactor( FILE *source )
 {
     Token token = scanner(source);
-    Expression *value = (Expression *)malloc( sizeof(Expression) );
-    value->leftOperand = value->rightOperand = NULL;
+    Expression *factor = (Expression *)malloc( sizeof(Expression) );
+    factor->leftOperand = factor->rightOperand = NULL;
 
     switch(token.type){
+    	case LeftPar:
+    		factor = parseExpression(source);
+    		Token match = scanner(source);
+    		if(match.type != RightPar) {
+    			printf("Syntax Error: Unbalanced parenthesis.\n");
+            	exit(1);
+    		}
+    		break;
         case Alphabet:
-            (value->v).type = Identifier;
-            strcpy((value->v).val.id, token.tok);
+            (factor->v).type = Identifier;
+            strcpy((factor->v).val.id, token.tok);
             break;
         case IntValue:
-            (value->v).type = IntConst;
-            (value->v).val.ivalue = atoi(token.tok);
+            (factor->v).type = IntConst;
+            (factor->v).val.ivalue = atoi(token.tok);
             break;
         case FloatValue:
-            (value->v).type = FloatConst;
-            (value->v).val.fvalue = atof(token.tok);
+            (factor->v).type = FloatConst;
+            (factor->v).val.fvalue = atof(token.tok);
             break;
         default:
             printf("Syntax Error: Expect Identifier or a Number %s\n", token.tok);
             exit(1);
     }
 
-    return value;
+    return factor;
+}
+
+Expression *parseTermTail( FILE *source, Expression *lvalue )
+{
+    Expression *R2;
+    Token token = scanner(source);
+
+    switch(token.type){
+        case MulOp:
+            R2 = (Expression *)malloc( sizeof(Expression) );
+            (R2->v).type = MulNode;
+            (R2->v).val.op = Mul;
+            R2->leftOperand = lvalue;
+            R2->rightOperand = parseFactor(source);
+            return parseTermTail(source, R2);
+        case DivOp:
+            R2 = (Expression *)malloc( sizeof(Expression) );
+            (R2->v).type = DivNode;
+            (R2->v).val.op = Div;
+            R2->leftOperand = lvalue;
+            R2->rightOperand = parseFactor(source);
+            return parseTermTail(source, R2);
+        case PlusOp:
+        case MinusOp:
+        case RightPar:
+        case Alphabet:
+        case PrintOp:
+            for(int i = strlen(token.tok) - 1; i >= 0; i--)
+        		ungetc(token.tok[i], source);
+            return lvalue;
+        case EOFsymbol:
+            return lvalue;
+        default:
+            printf("Syntax Error: Expect a numeric value or an identifier %s\n", token.tok);
+            exit(1);
+    }
+}
+
+Expression *parseTerm( FILE *source)
+{
+	Expression *factor, *R2;
+	factor = parseFactor(source);
+    R2 = parseTermTail(source, factor);
+    return R2;
 }
 
 Expression *parseExpressionTail( FILE *source, Expression *lvalue )
 {
+    Expression *R1;
     Token token = scanner(source);
-    Expression *expr;
 
     switch(token.type){
         case PlusOp:
-            expr = (Expression *)malloc( sizeof(Expression) );
-            (expr->v).type = PlusNode;
-            (expr->v).val.op = Plus;
-            expr->leftOperand = lvalue;
-            expr->rightOperand = parseValue(source);
-            return parseExpressionTail(source, expr);
+            R1 = (Expression *)malloc( sizeof(Expression) );
+            (R1->v).type = PlusNode;
+            (R1->v).val.op = Plus;
+            R1->leftOperand = lvalue;
+            R1->rightOperand = parseTerm(source);
+            return parseExpressionTail(source, R1);
         case MinusOp:
-            expr = (Expression *)malloc( sizeof(Expression) );
-            (expr->v).type = MinusNode;
-            (expr->v).val.op = Minus;
-            expr->leftOperand = lvalue;
-            expr->rightOperand = parseValue(source);
-            return parseExpressionTail(source, expr);
+            R1 = (Expression *)malloc( sizeof(Expression) );
+            (R1->v).type = MinusNode;
+            (R1->v).val.op = Minus;
+            R1->leftOperand = lvalue;
+            R1->rightOperand = parseTerm(source);
+            return parseExpressionTail(source, R1);
+        case RightPar:
         case Alphabet:
         case PrintOp:
             for(int i = strlen(token.tok) - 1; i >= 0; i--)
@@ -263,12 +322,15 @@ Expression *parseExpressionTail( FILE *source, Expression *lvalue )
     }
 }
 
-Expression *parseExpression( FILE *source, Expression *lvalue )
+Expression *parseExpression( FILE *source)
 {
-    Token token = scanner(source);
-    Expression *expr;
+    //Token token = scanner(source);
+    Expression *term, *R1;
+    term = parseTerm(source);
+    R1 = parseExpressionTail(source, term);
+    return R1;
 
-    switch(token.type){
+    /*switch(token.type){
         case PlusOp:
             expr = (Expression *)malloc( sizeof(Expression) );
             (expr->v).type = PlusNode;
@@ -283,17 +345,6 @@ Expression *parseExpression( FILE *source, Expression *lvalue )
             expr->leftOperand = lvalue;
             expr->rightOperand = parseValue(source);
             return parseExpressionTail(source, expr);
-        case MulOp:
-            expr = (Expression *)malloc( sizeof(Expression) );
-            (expr->v).type = MulNode;
-            (expr->v).val.op = Mul;
-
-
-            expr->leftOperand = lvalue;
-
-            expr->rightOperand = parseValue(source);
-            return parseExpressionTail(source, expr);
-        case DivOp:
 
         case Alphabet:
         case PrintOp:
@@ -305,7 +356,7 @@ Expression *parseExpression( FILE *source, Expression *lvalue )
         default:
             printf("Syntax Error: Expect a numeric value or an identifier %s\n", token.tok);
             exit(1);
-    }
+    }*/
 }
 
 Statement parseStatement( FILE *source, Token token )
@@ -317,9 +368,9 @@ Statement parseStatement( FILE *source, Token token )
         case Alphabet:
             next_token = scanner(source);
             if(next_token.type == AssignmentOp){
-                value = parseValue(source);
-                expr = parseExpression(source, value);
-                return makeAssignmentNode(token.tok, value, expr);
+                //value = parseValue(source);
+                expr = parseExpression(source);
+                return makeAssignmentNode(token.tok, expr, expr);
             }
             else{
                 printf("Syntax Error: Expect an assignment op %s\n", next_token.tok);
@@ -649,6 +700,12 @@ void fprint_op( FILE *target, ValueType op )
             break;
         case PlusNode:
             fprintf(target,"+\n");
+            break;
+        case MulNode:
+        	fprintf(target,"*\n");
+            break;
+        case DivNode:
+        	fprintf(target,"/\n");
             break;
         default:
             fprintf(target,"Error in fprintf_op ValueType = %d\n",op);
