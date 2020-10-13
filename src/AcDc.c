@@ -491,11 +491,11 @@ void add_table( SymbolTable *table, char *name, DataType t )
     int index = hash(name);
 
     while(table->table[index] != Notype) {
-    	index = (index + 1) % HASHTABLESIZE;
     	if(strcmp(table->symbolName[index], name) == 0) {
-        	printf("Error : id %s has been declared\n", name);//error or collision
-        	exit(1);
-    	}
+            printf("Error : id %s has been declared\n", name);//error or collision
+            exit(1);
+        }
+        index = (index + 1) % HASHTABLESIZE;
     }
     table->table[index] = t;
     table->symbolName[index] = (char *)malloc(sizeof(char) * MAXNAMELEN);
@@ -565,20 +565,22 @@ DataType generalize( Expression *left, Expression *right )
 DataType lookup_table( SymbolTable *table, char *name )
 {
     int index = hash(name);
+	//fprintf(stderr, "hash(name: %s) => index_old: %d\n", name, index);
     int i = index;
     do{
     	if(table->symbolName[i] == NULL || strcmp(table->symbolName[i], name) == 0)
     		break;
-    	
-    	index = (i + 1) % HASHTABLESIZE;
+    	//fprintf(stderr, "current index: %d\n", i);	
+    	i = (i + 1) % HASHTABLESIZE;
     }while(i != index);
-
+	
     if(table->symbolName[i] != NULL && strcmp(table->symbolName[i], name) == 0)
     	index = i;
     else {
     	printf("Error : identifier %s is not declared\n", name);//error
     	exit(1);
     }        
+	//fprintf(stderr, "index_new: %d, table->table[index] = %d\n", i, table->table[index]);
     return table->table[index];
 }
 
@@ -725,7 +727,7 @@ char findRegister(char *name, SymbolTable *table)
     	if(strcmp(table->symbolName[i], name) == 0)
     		break;
     	
-    	index = (i + 1) % HASHTABLESIZE;
+    	i = (i + 1) % HASHTABLESIZE;
     }while(i != index);
     return (char)(i + 'a');
 }
@@ -753,7 +755,6 @@ void fprint_op( FILE *target, ValueType op )
 
 void fprint_expr( FILE *target, Expression *expr, SymbolTable * table)
 {
-
     if(expr->leftOperand == NULL){
         switch( (expr->v).type ){
             case Identifier:
