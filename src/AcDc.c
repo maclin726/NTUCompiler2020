@@ -103,7 +103,8 @@ Token scanner( FILE *source )
             else if( c == 'i' && !islower(next_c))
                 token.type = IntegerDeclaration;
             else if( c == 'p' && !islower(next_c)) {
-            	ungetc(next_c, source);
+                // because when exiting the declaration, we'll unget this token in parserDeclaration
+                ungetc(next_c, source);
                 token.type = PrintOp;
             }
             else {
@@ -565,12 +566,10 @@ DataType generalize( Expression *left, Expression *right )
 DataType lookup_table( SymbolTable *table, char *name )
 {
     int index = hash(name);
-	//fprintf(stderr, "hash(name: %s) => index_old: %d\n", name, index);
     int i = index;
     do{
     	if(table->symbolName[i] == NULL || strcmp(table->symbolName[i], name) == 0)
     		break;
-    	//fprintf(stderr, "current index: %d\n", i);	
     	i = (i + 1) % HASHTABLESIZE;
     }while(i != index);
 	
@@ -580,7 +579,6 @@ DataType lookup_table( SymbolTable *table, char *name )
     	printf("Error : identifier %s is not declared\n", name);//error
     	exit(1);
     }        
-	//fprintf(stderr, "index_new: %d, table->table[index] = %d\n", i, table->table[index]);
     return table->table[index];
 }
 
