@@ -61,7 +61,7 @@ WS	 [ \t]+
 /* Int, Float, String, comment */
 
 Int_constant {digit}+
-Float_constant ({digit}+(\.{digit}+)?("e"[+-]?{digit}+)?)|({digit}+)?(\.{digit}+)("e"[+-]?{digit}+)?
+Float_constant ({digit}+(\.{digit}+)?("e"[+-]?{digit}+)?)|(({digit}+)?(\.{digit}+)("e"[+-]?{digit}+)?)|({digit}+(\.)("e"[+-]?{digit}+)?)
 String_constant ["]([^"\\\n]|\\.|\\\n)*["]
 Comment \/\*(\*\**[^\*\/]|[^\*])*\*\**\/
 
