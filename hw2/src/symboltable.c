@@ -6,7 +6,7 @@
 #include"header.h"
 
 #define TABLE_SIZE	512
-#define MAXIDNUM	512
+#define MAXIDNUM	1024
 
 symtab * hash_table[TABLE_SIZE];
 extern int linenumber;
