@@ -163,7 +163,7 @@ error    .
 {MK_comma}      {}
 {MK_semicol}    {}
 {newline}       { linenumber += 1; }
-{error}         { printf("ERR \n"); /*return ERROR;*/ }
+{error}         { printf("ERROR: invalid token [%s]\n", yytext); exit(1); }
 
 
 %%
