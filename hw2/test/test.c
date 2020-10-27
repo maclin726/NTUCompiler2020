@@ -1,25 +1,16 @@
-int func(int a, int b)
-{
-	int main;
-    a = 3;
-	main = a * b;
-}
-
 int main()
 {
-	/* 1: this is just a sample */
-    int c, d;
-	float f,g;
-	g = 3.3;
-    c = 1;
-    d = 3;
+	/* 1: this is * just a / sample */
+	int __n;
+	int abc, def, main_1;
+	int a1;
+	float b1, z_123_x_45;
+	write("Enter a number");
 	/* 2: this is a 3-line
-	comment
-	*/
-	f = read();
-    func(c,e);
-	write(d);
-	d = 0;  /* 3: this is /* the end ***/
-	
-    return 0;
+	 * comment
+	 * */
+	__n = read();
+	abc = 4.e-1 + 1;
+	def = abc * abc;
+	write(def); /* 3: this is /* the end ***/
 }

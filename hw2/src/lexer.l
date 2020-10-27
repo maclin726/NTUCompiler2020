@@ -55,7 +55,7 @@ void 	 printSymTab();
 
 letter   [A-Za-z]
 digit    [0-9]
-ID	 {letter}({letter}|{digit}|"_")*
+ID	 ({letter}|"_")({letter}|{digit}|"_")*
 WS	 [ \t]+
 
 /* Int, Float, String, comment */
