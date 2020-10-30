@@ -55,13 +55,13 @@ void 	 printSymTab();
 
 letter   [A-Za-z]
 digit    [0-9]
-ID	 ({letter}|"_")({letter}|{digit}|"_")*
+ID	 {letter}({letter}|{digit})*(__*({letter}|{digit})({letter}|{digit})*)*
 WS	 [ \t]+
 
 /* Int, Float, String, comment */
 
 Int_constant {digit}+
-Float_constant ({digit}+(\.{digit}+)?("e"[+-]?{digit}+)?)|(({digit}+)?(\.{digit}+)("e"[+-]?{digit}+)?)|({digit}+(\.)("e"[+-]?{digit}+)?)
+Float_constant ({digit}+(\.{digit}+)?((e|E)[+-]?{digit}+)?)|(({digit}+)?(\.{digit}+)((e|E)[+-]?{digit}+)?)|({digit}+(\.)((e|E)[+-]?{digit}+)?)
 String_constant ["]([^"\\\n]|\\.|\\\n)*["]
 Comment \/\*(\*\**[^\*\/]|[^\*])*\*\**\/
 
