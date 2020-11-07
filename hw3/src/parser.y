@@ -343,6 +343,10 @@ dim_decl	: MK_LB cexpr MK_RB
             /*TODO: Try if you can define a recursive production rule
             | .......
             */
+			| dim_decl MK_LB cexpr MK_RB
+				{
+					/*TODO*/
+				}
             ;
 cexpr		: cexpr OP_PLUS mcexpr 
                 {
@@ -423,6 +427,10 @@ stmt		: MK_LBRACE block MK_RBRACE
                     /*TODO*/
                 }
             /*TODO: | While Statement */
+			| WHILE MK_LPAREN relop_expr MK_RPAREN stmt
+				{
+					/*TODO*/
+				}
             | FOR MK_LPAREN assign_expr_list MK_SEMICOLON relop_expr_list MK_SEMICOLON assign_expr_list MK_RPAREN stmt
                 {
                     /*TODO*/
@@ -432,8 +440,20 @@ stmt		: MK_LBRACE block MK_RBRACE
                     /*TODO*/
                 }
             /*TODO: | If Statement */
+			| IF MK_LPAREN relop_expr MK_RPAREN stmt
+				{	
+					/*TODO*/
+				}
             /*TODO: | If then else */
+			| IF MK_LPAREN relop_expr MK_RPAREN stmt ELSE stmt
+				{
+					/*TODO*/
+				}
             /*TODO: | function call */
+            | ID MK_LPAREN relop_expr_list MK_RPAREN MK_SEMICOLON 
+                {
+                    /*TODO*/
+                }
             | MK_SEMICOLON 
                 {
                     /*TODO*/
@@ -607,6 +627,10 @@ factor		: MK_LPAREN relop_expr MK_RPAREN
                     /*TODO*/
                 }
             /*TODO: | -(<relop_expr>) e.g. -(4) */
+			| OP_MINUS MK_LPAREN relop_expr MK_RPAREN
+				{
+					/*TODO*/
+				}
             | OP_NOT MK_LPAREN relop_expr MK_RPAREN
                 {   
                     /*TODO*/
@@ -617,6 +641,10 @@ factor		: MK_LPAREN relop_expr MK_RPAREN
                     $$->semantic_value.const1=$1;
                 }
             /*TODO: | -<constant> e.g. -4 */
+            | OP_MINUS CONST
+                {
+                    /*TODO*/
+                }
             | OP_NOT CONST
                 {
                     /*TODO*/
@@ -626,6 +654,10 @@ factor		: MK_LPAREN relop_expr MK_RPAREN
                     /*TODO*/
                 }
             /*TODO: | -<function call> e.g. -f(4) */
+            | OP_MINUS ID MK_LPAREN relop_expr_list MK_RPAREN 
+                {
+                    /*TODO*/
+                }
             | OP_NOT ID MK_LPAREN relop_expr_list MK_RPAREN
                 {
                     /*TODO*/
@@ -635,6 +667,10 @@ factor		: MK_LPAREN relop_expr MK_RPAREN
                     /*TODO*/
                 }
             /*TODO: | -<var_ref> e.g. -var */
+            | OP_MINUS var_ref 
+                {
+                    /*TODO*/
+                }
             | OP_NOT var_ref 
                 {
                     /*TODO*/
@@ -682,4 +718,4 @@ char *mesg;
   {
   printf("%s\t%d\t%s\t%s\n", "Error found in Line ", linenumber, "next token: ", yytext );
   exit(1);
- 
+} 
