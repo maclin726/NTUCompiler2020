@@ -1,9 +1,16 @@
+*.o
+*~
+
 # hw2
 hw2/src/lex.yy.*
 hw2/src/scanner
-hw2/src/symboltable.o
-*~
 
 # hw3
 hw3/src/parser.output
 hw3/src/parser.tab.h
+hw3/src/AST_Graph.gv
+hw3/src/lex.yy.c
+hw3/src/*.jpg
+hw3/src/parser
+hw3/src/parser.tab.c
+hw3/src/test
