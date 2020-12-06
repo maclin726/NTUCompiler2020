@@ -56,40 +56,43 @@ typedef enum ErrorMsgKind
     IS_TYPE_NOT_VARIABLE,
     IS_FUNCTION_NOT_VARIABLE,
     STRING_OPERATION,
-    ARRAY_SIZE_NOT_INT,
+    ARRAY_SIZE_NOT_INT,     // declaration
     ARRAY_SIZE_NEGATIVE,
-    ARRAY_SUBSCRIPT_NOT_INT,
+    ARRAY_SUBSCRIPT_NOT_INT,    // statement
     PASS_ARRAY_TO_SCALAR,
-    PASS_SCALAR_TO_ARRAY
+    PASS_SCALAR_TO_ARRAY,
+    ASSIGN_NON_CONST_TO_GLOBAL
 } ErrorMsgKind;
 
-void printErrorMsgSpecial(AST_NODE* node1, char* name2, ErrorMsgKind errorMsgKind)
-{
-    g_anyErrorOccur = 1;
-    printf("Error found in line %d\n", node1->linenumber);
-    /*
-    switch(errorMsgKind)
-    {
-    default:
-        printf("Unhandled case in void printErrorMsg(AST_NODE* node, ERROR_MSG_KIND* errorMsgKind)\n");
-        break;
-    }
-    */
-}
-
-
-void printErrorMsg(AST_NODE* node, ErrorMsgKind errorMsgKind)
+void printErrorMsg(AST_NODE* node, char* name, ErrorMsgKind errorMsgKind)
 {
     g_anyErrorOccur = 1;
     printf("Error found in line %d\n", node->linenumber);
-    /*
+    
     switch(errorMsgKind)
     {
-        printf("Unhandled case in void printErrorMsg(AST_NODE* node, ERROR_MSG_KIND* errorMsgKind)\n");
-        break;
+        default:
+            printf("Unhandled case in void printErrorMsg(AST_NODE* node, char* name, ERROR_MSG_KIND* errorMsgKind)\n");
+            break;
     }
-    */
+    
 }
+
+
+/*void printErrorMsg(AST_NODE* node, ErrorMsgKind errorMsgKind)
+{
+    g_anyErrorOccur = 1;
+    printf("Error found in line %d\n", node->linenumber);
+    
+    switch(errorMsgKind)
+    {
+
+        default:
+            printf("Unhandled case in void printErrorMsg(AST_NODE* node, ERROR_MSG_KIND* errorMsgKind)\n");
+            break;
+    }
+    
+}*/
 
 
 void semanticAnalysis(AST_NODE *root)
@@ -110,12 +113,47 @@ DATA_TYPE getBiggerType(DATA_TYPE dataType1, DATA_TYPE dataType2)
 
 void processProgramNode(AST_NODE *programNode)
 {
+    // walk tree
+    AST_NODE *child = programNode->child;
+    while(child != NULL) {
+        switch(child->nodeType) {
+            case VARIABLE_DECL_LIST_NODE:
+                processDeclarationListNode(child);
+                break;
+            case DECLARATION_NODE:  // FUNCTION_DECL
+                declareFunction(child);
+                break;
+            default:
+                break;
+        }
+        child = child->rightSibling;
+    }
+    return;
 }
 
-void processDeclarationNode(AST_NODE* declarationNode)
+void processDeclarationListNode(AST_NODE* declarationNode)
 {
+    AST_NODE *child = declarationNode->child;
+    while(child != NULL) {
+        switch(child->semantic_value.declSemanticValue.kind) {
+            case VARIABLE_DECL:
+                (child);
+                break;
+            case TYPE_DECL:
+                processTypeNode(child);
+                break;
+            default:
+                break;
+        }
+        child = child->rightSibling;
+    }
+    return;
 }
 
+/*void processDeclarationNode(AST_NODE* declarationNode)
+{
+    
+}*/
 
 void processTypeNode(AST_NODE* idNodeAsType)
 {

@@ -70,6 +70,49 @@ void initializeSymbolTable()
     
     symbolTable.currentLevel = 0;
     symbolTable.scopeDisplayElementCount = 0;
+
+    // int
+    SymbolAttribute *attribute = (SymbolAttribute *)malloc(sizeof(SymbolAttribute));
+    attribute->attr.typeDescriptor = (TypeDescriptor *)malloc(sizeof(TypeDescriptor));
+    attribute->attributeKind = TYPE_ATTRIBUTE;
+    attribute->attr.typeDescriptor->kind = SCALAR_TYPE_DESCRIPTOR;
+    attribute->attr.typeDescriptor->properties.dataType = INT_TYPE;
+    enterSymbol(SYMBOL_TABLE_INT_NAME, attribute);
+
+    // float
+    attribute = (SymbolAttribute *)malloc(sizeof(SymbolAttribute));
+    attribute->attr.typeDescriptor = (TypeDescriptor *)malloc(sizeof(TypeDescriptor));
+    attribute->attributeKind = TYPE_ATTRIBUTE;
+    attribute->attr.typeDescriptor->kind = SCALAR_TYPE_DESCRIPTOR;
+    attribute->attr.typeDescriptor->properties.dataType = FLOAT_TYPE;
+    enterSymbol(SYMBOL_TABLE_FLOAT_NAME, attribute);
+    
+    // void
+    attribute = (SymbolAttribute *)malloc(sizeof(SymbolAttribute));
+    attribute->attr.typeDescriptor = (TypeDescriptor *)malloc(sizeof(TypeDescriptor));
+    attribute->attributeKind = TYPE_ATTRIBUTE;
+    attribute->attr.typeDescriptor->kind = SCALAR_TYPE_DESCRIPTOR;
+    attribute->attr.typeDescriptor->properties.dataType = VOID_TYPE;
+    enterSymbol(SYMBOL_TABLE_VOID_NAME, attribute);
+
+    // read
+    attribute = (SymbolAttribute *)malloc(sizeof(SymbolAttribute));
+    attribute->attr.functionSignature = (FunctionSignature *)malloc(sizeof(FunctionSignature));
+    attribute->attributeKind = FUNCTION_SIGNATURE;
+    attribute->attr.functionSignature->parametersCount = 0;
+    attribute->attr.functionSignature->parameterList = NULL;
+    attribute->attr.functionSignature->returnType = INT_TYPE;
+    enterSymbol(SYMBOL_TABLE_SYS_LIB_READ, attribute);
+
+    // write
+    attribute = (SymbolAttribute *)malloc(sizeof(SymbolAttribute));
+    attribute->attr.functionSignature = (FunctionSignature *)malloc(sizeof(FunctionSignature));
+    attribute->attributeKind = FUNCTION_SIGNATURE;
+    attribute->attr.functionSignature->parametersCount = 1;
+    attribute->attr.functionSignature->parameterList = NULL;
+    attribute->attr.functionSignature->returnType = INT_TYPE;
+    enterSymbol(SYMBOL_TABLE_SYS_LIB_WRITE, attribute);
+
     return;
 }
 
