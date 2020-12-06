@@ -15,3 +15,6 @@ hw3/src/lex.yy.c
 hw3/src/parser
 hw3/src/parser.tab.c
 hw3/src/test
+
+# hw4
+hw4/symbolTable.o

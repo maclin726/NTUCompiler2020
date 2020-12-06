@@ -12,6 +12,7 @@
 #define SYMBOL_TABLE_SYS_LIB_READ "read"
 #define SYMBOL_TABLE_SYS_LIB_FREAD "fread"
 #define HASH_TABLE_SIZE 256
+#define MAX_SCOPE_SIZE 256
 
 
 typedef enum SymbolAttributeKind
@@ -87,7 +88,7 @@ typedef struct SymbolTableEntry
 typedef struct SymbolTable
 {
     SymbolTableEntry* hashTable[HASH_TABLE_SIZE];
-    SymbolTableEntry** scopeDisplay;
+    SymbolTableEntry* scopeDisplay[MAX_SCOPE_SIZE];
     int currentLevel;
     int scopeDisplayElementCount;
 } SymbolTable;
