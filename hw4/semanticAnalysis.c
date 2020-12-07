@@ -9,7 +9,6 @@ int g_anyErrorOccur = 0;
 
 DATA_TYPE getBiggerType(DATA_TYPE dataType1, DATA_TYPE dataType2);
 void processProgramNode(AST_NODE *programNode);
-void processDeclarationNode(AST_NODE* declarationNode);
 void declareIdList(AST_NODE* typeNode, int ignoreArrayFirstDimSize);
 void declareFunction(AST_NODE* returnTypeNode);
 void processDeclDimList(AST_NODE* variableDeclDimList, TypeDescriptor* typeDescriptor, int ignoreFirstDimSize);
@@ -34,6 +33,7 @@ void processConstValueNode(AST_NODE* constValueNode);
 void getExprOrConstValue(AST_NODE* exprOrConstNode, int* iValue, float* fValue);
 void evaluateExprValue(AST_NODE* exprNode);
 void processDeclarationListNode(AST_NODE* declarationNode);
+SymbolAttribute *makeFunctionAttribute(AST_NODE *idNode);
 
 typedef enum ErrorMsgKind
 {
@@ -134,11 +134,6 @@ void processDeclarationListNode(AST_NODE* declarationNode)
     return;
 }
 
-/*void processDeclarationNode(AST_NODE* declarationNode)
-{
-    
-}*/
-
 void processTypeNode(AST_NODE* idNodeAsType)
 {
     SymbolTableEntry *entry = retrieveSymbol(idNodeAsType->semantic_value.identifierSemanticValue.identifierName);
@@ -162,29 +157,20 @@ void processTypeNode(AST_NODE* idNodeAsType)
     return;
 }
 
-SymbolAttribute *makeSymbolAttribute(AST_NODE *idNode)
+SymbolAttribute *makeSymbolAttribute(AST_NODE *idNode) //return the attribute of a VAR_DECL, FUNC_PARA_DECL or TYPE_DECL node
 {
     SymbolAttribute *attribute = (SymbolAttribute *)malloc(sizeof(SymbolAttribute));
-    switch(idNode->parent->semantic_value.declSemanticValue.kind) {
-        case VARIABLE_DECL:
-        case FUNCTION_PARAMETER_DECL:
-        case TYPE_DECL:
-            attribute->attributeKind = (idNode->parent->semantic_value.declSemanticValue.kind == TYPE_DECL)?TYPE_ATTRIBUTE : VARIABLE_ATTRIBUTE;
-            memcpy(attribute->attr.typeDescriptor,
-                idNode->leftmostSibling->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor,
-                sizeof(TypeDescriptor) );
-            if(idNode->semantic_value.identifierSemanticValue.kind == ARRAY_ID) {
-                /*TODO*/
-            }
-            break;
-        case FUNCTION_DECL:
-            attribute->attributeKind = FUNCTION_SIGNATURE;
-            break;
-        default:
-            break;
+    attribute->attributeKind = (idNode->parent->semantic_value.declSemanticValue.kind == TYPE_DECL)?TYPE_ATTRIBUTE : VARIABLE_ATTRIBUTE;
+    attribute->attr.typeDescriptor = (TypeDescriptor *)malloc(sizoef(TypeDescriptor));
+    memcpy(attribute->attr.typeDescriptor,
+        idNode->leftmostSibling->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor,
+        sizeof(TypeDescriptor) );
+    if(idNode->semantic_value.identifierSemanticValue.kind == ARRAY_ID) {
+        /*TODO*/
     }
-
+    return attribute;
 }
+
 
 void declareIdList(AST_NODE* declarationNode, int ignoreArrayFirstDimSize)
 {
@@ -205,14 +191,106 @@ void declareIdList(AST_NODE* declarationNode, int ignoreArrayFirstDimSize)
         }
         idNode = idNode->rightSibling;
     }
+    return;
+}
+
+SymbolAttribute *makeFunctionAttribute(AST_NODE *idNode){
+    SymbolAttribute *attribute = (SymbolAttribute *)malloc(sizeof(SymbolAttribute));
+    attribute->attributeKind = FUNCTION_SIGNATURE;
+    attribute->attr.functionSignature = (FunctionSignature *)malloc(sizeof(FunctionSignature));
+    attribute->attr.functionSignature->returnType = idNode->leftmostSibling->dataType;
+    attribute->attr.functionSignature->parametersCount = 0;
+    Parameter *tail = NULL;
+    AST_NODE *parameterDeclNode = idNode->rightSibling->child;
+    while( parameterDeclNode != NULL ){
+        declareIdList(parameterDeclNode, 1);
+        if( tail == NULL ){
+            attribute->attr.functionSignature->parameterList = (Parameter *)malloc(sizeof(Parameter));
+            tail = attribute->attr.functionSignature->parameterList;
+        }
+        else{
+            tail->next = (Parameter *)malloc(sizeof(Parameter));
+            tail = tail->next;
+        }
+        tail->type = (TypeDescriptor *)malloc(sizeof(TypeDescriptor));
+        memcpy(tail->type, parameterDeclNode->child->rightSibling->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor, sizeof(TypeDescriptor));
+        tail->parameterName = parameterDeclNode->child->rightSibling->semantic_value.identifierSemanticValue.identifierName;
+        attribute->attr.functionSignature->parametersCount += 1;
+
+        parameterDeclNode = parameterDeclNode->rightSibling;
+    }
+    return attribute;
 }
 
 void declareFunction(AST_NODE* declarationNode)
 {
+    AST_NODE *typeNode = declarationNode->child;
+    AST_NODE *idNode = typeNode->rightSibling;
+    processTypeNode(typeNode);
+    char *idName = idNode->semantic_value.identifierSemanticValue.identifierName;
+    if( declaredLocally(idName) != NULL ){
+        printErrorMsg(idNode, NULL, SYMBOL_REDECLARED);
+    }
+    enterSymbol(idName, NULL);
+    
+    openScope();
+    SymbolTableEntry *functionEntry = retrieveSymbol(idName);
+    functionEntry->attribute = makeFunctionAttribute(idNode);
+    AST_NODE *blockNode = idNode->rightSibling->rightSibling;
+    processBlockNode(blockNode);
+    closeScope();
+    return;
+}
+
+void processBlockNode(AST_NODE* blockNode)
+{
+    AST_NODE *listNode = blockNode->child;
+    while( listNode != NULL ){
+        switch(listNode->nodeType){
+            case VARIABLE_DECL_LIST_NODE:
+                processDeclarationListNode(listNode);
+                break;
+            case STMT_LIST_NODE:
+                AST_NODE *child = listNode->child;
+                while( child != NULL ){
+                    processStmtNode(child);
+                    child = child->rightSibling;
+                }
+                break;
+        }
+        listNode = listNode->leftmostSibling;
+    }
+    return;
+}
+
+void processStmtNode(AST_NODE* stmtNode)
+{
+    switch(stmtNode->semantic_value.stmtSemanticValue.kind){
+        case WHILE_STMT:
+            checkWhileStmt(stmtNode);
+            break;
+        case FOR_STMT:
+            checkForStmt(stmtNode);
+            break;
+        case ASSIGN_STMT:
+            checkAssignmentStmt(stmtNode);
+            break;
+        case IF_STMT:
+            checkIfStmt(stmtNode);
+            break;
+        case FUNCTION_CALL_STMT:
+            checkFunctionCall(stmtNode);
+            break;
+        case RETURN_STMT:
+            checkReturnStmt(stmtNode);
+            break;
+    }
+    return;
 }
 
 void checkAssignOrExpr(AST_NODE* assignOrExprRelatedNode)
 {
+
 }
 
 void checkWhileStmt(AST_NODE* whileNode)
@@ -282,17 +360,6 @@ void processConstValueNode(AST_NODE* constValueNode)
 void checkReturnStmt(AST_NODE* returnNode)
 {
 }
-
-
-void processBlockNode(AST_NODE* blockNode)
-{
-}
-
-
-void processStmtNode(AST_NODE* stmtNode)
-{
-}
-
 
 void processGeneralNode(AST_NODE *node)
 {
