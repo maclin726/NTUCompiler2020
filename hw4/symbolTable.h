@@ -99,7 +99,7 @@ void symbolTableEnd();
 SymbolTableEntry* retrieveSymbol(char* symbolName);
 SymbolTableEntry* enterSymbol(char* symbolName, SymbolAttribute* attribute);
 void removeSymbol(char* symbolName);
-int declaredLocally(char* symbolName);
+SymbolTableEntry* declaredLocally(char* symbolName);
 void openScope();
 void closeScope();
 

@@ -10,7 +10,7 @@ int g_anyErrorOccur = 0;
 DATA_TYPE getBiggerType(DATA_TYPE dataType1, DATA_TYPE dataType2);
 void processProgramNode(AST_NODE *programNode);
 void processDeclarationNode(AST_NODE* declarationNode);
-void declareIdList(AST_NODE* typeNode, SymbolAttributeKind isVariableOrTypeAttribute, int ignoreArrayFirstDimSize);
+void declareIdList(AST_NODE* typeNode, int ignoreArrayFirstDimSize);
 void declareFunction(AST_NODE* returnTypeNode);
 void processDeclDimList(AST_NODE* variableDeclDimList, TypeDescriptor* typeDescriptor, int ignoreFirstDimSize);
 void processTypeNode(AST_NODE* typeNode);
@@ -33,35 +33,13 @@ void processVariableRValue(AST_NODE* idNode);
 void processConstValueNode(AST_NODE* constValueNode);
 void getExprOrConstValue(AST_NODE* exprOrConstNode, int* iValue, float* fValue);
 void evaluateExprValue(AST_NODE* exprNode);
-
+void processDeclarationListNode(AST_NODE* declarationNode);
 
 typedef enum ErrorMsgKind
 {
-    SYMBOL_IS_NOT_TYPE,
-    SYMBOL_REDECLARE,
     SYMBOL_UNDECLARED,
-    NOT_FUNCTION_NAME,
-    TRY_TO_INIT_ARRAY,
-    EXCESSIVE_ARRAY_DIM_DECLARATION,
-    RETURN_ARRAY,
-    VOID_VARIABLE,
-    TYPEDEF_VOID_ARRAY,
-    PARAMETER_TYPE_UNMATCH,
-    TOO_FEW_ARGUMENTS,
-    TOO_MANY_ARGUMENTS,
-    RETURN_TYPE_UNMATCH,
-    INCOMPATIBLE_ARRAY_DIMENSION,
-    NOT_ASSIGNABLE,
-    NOT_ARRAY,
-    IS_TYPE_NOT_VARIABLE,
-    IS_FUNCTION_NOT_VARIABLE,
-    STRING_OPERATION,
-    ARRAY_SIZE_NOT_INT,     // declaration
-    ARRAY_SIZE_NEGATIVE,
-    ARRAY_SUBSCRIPT_NOT_INT,    // statement
-    PASS_ARRAY_TO_SCALAR,
-    PASS_SCALAR_TO_ARRAY,
-    ASSIGN_NON_CONST_TO_GLOBAL
+    SYMBOL_IS_NOT_TYPE,
+    SYMBOL_REDECLARED
 } ErrorMsgKind;
 
 void printErrorMsg(AST_NODE* node, char* name, ErrorMsgKind errorMsgKind)
@@ -71,13 +49,21 @@ void printErrorMsg(AST_NODE* node, char* name, ErrorMsgKind errorMsgKind)
     
     switch(errorMsgKind)
     {
+        case SYMBOL_UNDECLARED:
+            printf("error: \'%s\' was not declared in this scope\n", node->semantic_value.identifierSemanticValue.identifierName);
+            break;
+        case SYMBOL_IS_NOT_TYPE:    // self-defined
+            printf("error: \'%s\' was not declared as type\n", node->semantic_value.identifierSemanticValue.identifierName);
+            break;
+        case SYMBOL_REDECLARED:
+            printf("error: redeclaration of \'%s\'", node->semantic_value.identifierSemanticValue.identifierName);
+            break;
         default:
             printf("Unhandled case in void printErrorMsg(AST_NODE* node, char* name, ERROR_MSG_KIND* errorMsgKind)\n");
             break;
     }
     
 }
-
 
 /*void printErrorMsg(AST_NODE* node, ErrorMsgKind errorMsgKind)
 {
@@ -94,7 +80,6 @@ void printErrorMsg(AST_NODE* node, char* name, ErrorMsgKind errorMsgKind)
     
 }*/
 
-
 void semanticAnalysis(AST_NODE *root)
 {
     processProgramNode(root);
@@ -109,7 +94,6 @@ DATA_TYPE getBiggerType(DATA_TYPE dataType1, DATA_TYPE dataType2)
         return INT_TYPE;
     }
 }
-
 
 void processProgramNode(AST_NODE *programNode)
 {
@@ -137,10 +121,10 @@ void processDeclarationListNode(AST_NODE* declarationNode)
     while(child != NULL) {
         switch(child->semantic_value.declSemanticValue.kind) {
             case VARIABLE_DECL:
-                (child);
+                declareIdList(child, 0);    // cannot ignore array first dim size
                 break;
             case TYPE_DECL:
-                processTypeNode(child);
+                declareIdList(child, 0);
                 break;
             default:
                 break;
@@ -157,10 +141,73 @@ void processDeclarationListNode(AST_NODE* declarationNode)
 
 void processTypeNode(AST_NODE* idNodeAsType)
 {
+    SymbolTableEntry *entry = retrieveSymbol(idNodeAsType->semantic_value.identifierSemanticValue.identifierName);
+    if(entry == NULL) {  // e.g., ABC k; ABC was not declared as type
+        printErrorMsg(idNodeAsType, NULL, SYMBOL_UNDECLARED);
+        idNodeAsType->dataType = ERROR_TYPE;
+    }
+    else if(entry->attribute->attributeKind != TYPE_ATTRIBUTE) {
+        printErrorMsg(idNodeAsType, NULL, SYMBOL_IS_NOT_TYPE);
+        idNodeAsType->dataType = ERROR_TYPE;
+    }
+    else {
+        idNodeAsType->semantic_value.identifierSemanticValue.symbolTableEntry = entry;
+        if(entry->attribute->attr.typeDescriptor->kind == SCALAR_TYPE_DESCRIPTOR) {
+            idNodeAsType->dataType = entry->attribute->attr.typeDescriptor->properties.dataType;
+        }
+        else {
+            idNodeAsType->dataType = entry->attribute->attr.typeDescriptor->properties.arrayProperties.elementType;
+        }
+    }
+    return;
 }
 
+SymbolAttribute *makeSymbolAttribute(AST_NODE *idNode)
+{
+    SymbolAttribute *attribute = (SymbolAttribute *)malloc(sizeof(SymbolAttribute));
+    switch(idNode->parent->semantic_value.declSemanticValue.kind) {
+        case VARIABLE_DECL:
+        case FUNCTION_PARAMETER_DECL:
+        case TYPE_DECL:
+            attribute->attributeKind = (idNode->parent->semantic_value.declSemanticValue.kind == TYPE_DECL)?TYPE_ATTRIBUTE : VARIABLE_ATTRIBUTE;
+            memcpy(attribute->attr.typeDescriptor,
+                idNode->leftmostSibling->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor,
+                sizeof(TypeDescriptor) );
+            if(idNode->semantic_value.identifierSemanticValue.kind == ARRAY_ID) {
+                /*TODO*/
+            }
+            break;
+        case FUNCTION_DECL:
+            attribute->attributeKind = FUNCTION_SIGNATURE;
+            break;
+        default:
+            break;
+    }
 
-void declareIdList(AST_NODE* declarationNode, SymbolAttributeKind isVariableOrTypeAttribute, int ignoreArrayFirstDimSize)
+}
+
+void declareIdList(AST_NODE* declarationNode, int ignoreArrayFirstDimSize)
+{
+    AST_NODE *typeNode = declarationNode->child;
+    AST_NODE *idNode = typeNode->rightSibling;
+    processTypeNode(typeNode);
+    while(idNode != NULL) {
+        idNode->dataType = typeNode->dataType;
+
+        char *idName = idNode->semantic_value.identifierSemanticValue.identifierName;
+
+        SymbolTableEntry *entry = declaredLocally(idName);
+        if(entry == NULL) { // put into symbol table
+            enterSymbol(idName, makeSymbolAttribute(idNode));
+        }
+        else{
+            printErrorMsg(idNode, NULL, SYMBOL_REDECLARED);
+        }
+        idNode = idNode->rightSibling;
+    }
+}
+
+void declareFunction(AST_NODE* declarationNode)
 {
 }
 
@@ -252,10 +299,5 @@ void processGeneralNode(AST_NODE *node)
 }
 
 void processDeclDimList(AST_NODE* idNode, TypeDescriptor* typeDescriptor, int ignoreFirstDimSize)
-{
-}
-
-
-void declareFunction(AST_NODE* declarationNode)
 {
 }

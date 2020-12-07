@@ -159,13 +159,13 @@ void removeSymbol(char* symbolName)
     // NONE
 }
 
-int declaredLocally(char* symbolName)
+symbolTableEntry* declaredLocally(char* symbolName)
 {
     SymbolTableEntry *oldSym = retrieveSymbol(symbolName);
     if(oldSym != NULL && oldSym->nestingLevel == symbolTable.currentLevel) {
-        return 1;
+        return oldSym;
     }
-    return 0;
+    return NULL;
 }
 
 void openScope()
