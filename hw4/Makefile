@@ -22,8 +22,8 @@ symbolTable.o: symbolTable.c
 lex.yy.c: lexer3.l
 	$(LEX) lexer3.l
 
-parser.tab.c: parser3.y 
-	$(YACC) $(YACCFLAG) parser3.y
+parser.tab.c: parser.y 
+	$(YACC) $(YACCFLAG) parser.y
 
 alloc.o: alloc.c
 	$(CC) -c alloc.c

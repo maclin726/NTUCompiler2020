@@ -159,7 +159,7 @@ void removeSymbol(char* symbolName)
     // NONE
 }
 
-symbolTableEntry* declaredLocally(char* symbolName)
+SymbolTableEntry* declaredLocally(char* symbolName)
 {
     SymbolTableEntry *oldSym = retrieveSymbol(symbolName);
     if(oldSym != NULL && oldSym->nestingLevel == symbolTable.currentLevel) {
@@ -179,7 +179,9 @@ void closeScope()
     SymbolTableEntry *curSym = symbolTable.scopeDisplay[symbolTable.currentLevel];
     while(curSym != NULL) {
         SymbolTableEntry *prevSym = curSym->sameNameInOuterLevel;
-        removeFromHashChain(curSym);
+        SymbolTableEntry *oldSym = curSym;
+        curSym = curSym->nextInSameLevel;
+        removeFromHashChain(oldSym);
         if(prevSym != NULL) {
             enterIntoHashChain(prevSym);
         }

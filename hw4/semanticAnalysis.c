@@ -16,16 +16,16 @@ void processTypeNode(AST_NODE* typeNode);
 void processBlockNode(AST_NODE* blockNode);
 void processStmtNode(AST_NODE* stmtNode);
 void processGeneralNode(AST_NODE *node);
-void checkAssignOrExpr(AST_NODE* assignOrExprRelatedNode);
-void checkWhileStmt(AST_NODE* whileNode);
-void checkForStmt(AST_NODE* forNode);
-void checkAssignmentStmt(AST_NODE* assignmentNode);
-void checkIfStmt(AST_NODE* ifNode);
-void checkWriteFunction(AST_NODE* functionCallNode);
-void checkFunctionCall(AST_NODE* functionCallNode);
-void processExprRelatedNode(AST_NODE* exprRelatedNode);
-void checkParameterPassing(Parameter* formalParameter, AST_NODE* actualParameter);
-void checkReturnStmt(AST_NODE* returnNode);
+void processAssignOrExpr(AST_NODE* assignOrExprRelatedNode);
+void processWhileStmt(AST_NODE* whileNode);
+void processForStmt(AST_NODE* forNode);
+void processAssignmentStmt(AST_NODE* assignmentNode);
+void processIfStmt(AST_NODE* ifNode);
+void processWriteFunction(AST_NODE* functionCallNode);
+void processFunctionCall(AST_NODE* functionCallNode);
+void processRelopNode(AST_NODE* relopNode);
+void processParameterPassing(Parameter* formalParameter, AST_NODE* actualParameter);
+void processReturnStmt(AST_NODE* returnNode);
 void processExprNode(AST_NODE* exprNode);
 void processVariableLValue(AST_NODE* idNode);
 void processVariableRValue(AST_NODE* idNode);
@@ -45,18 +45,18 @@ typedef enum ErrorMsgKind
 void printErrorMsg(AST_NODE* node, char* name, ErrorMsgKind errorMsgKind)
 {
     g_anyErrorOccur = 1;
-    printf("Error found in line %d\n", node->linenumber);
+    printf("Error found in line %d: ", node->linenumber);
     
     switch(errorMsgKind)
     {
         case SYMBOL_UNDECLARED:
-            printf("error: \'%s\' was not declared in this scope\n", node->semantic_value.identifierSemanticValue.identifierName);
+            printf("\'%s\' was not declared in this scope\n", node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case SYMBOL_IS_NOT_TYPE:    // self-defined
-            printf("error: \'%s\' was not declared as type\n", node->semantic_value.identifierSemanticValue.identifierName);
+            printf("\'%s\' was not declared as type\n", node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case SYMBOL_REDECLARED:
-            printf("error: redeclaration of \'%s\'", node->semantic_value.identifierSemanticValue.identifierName);
+            printf("redeclaration of \'%s\'\n", node->semantic_value.identifierSemanticValue.identifierName);
             break;
         default:
             printf("Unhandled case in void printErrorMsg(AST_NODE* node, char* name, ERROR_MSG_KIND* errorMsgKind)\n");
@@ -83,6 +83,7 @@ void printErrorMsg(AST_NODE* node, char* name, ErrorMsgKind errorMsgKind)
 void semanticAnalysis(AST_NODE *root)
 {
     processProgramNode(root);
+    return;
 }
 
 
@@ -161,7 +162,7 @@ SymbolAttribute *makeSymbolAttribute(AST_NODE *idNode) //return the attribute of
 {
     SymbolAttribute *attribute = (SymbolAttribute *)malloc(sizeof(SymbolAttribute));
     attribute->attributeKind = (idNode->parent->semantic_value.declSemanticValue.kind == TYPE_DECL)?TYPE_ATTRIBUTE : VARIABLE_ATTRIBUTE;
-    attribute->attr.typeDescriptor = (TypeDescriptor *)malloc(sizoef(TypeDescriptor));
+    attribute->attr.typeDescriptor = (TypeDescriptor *)malloc(sizeof(TypeDescriptor));
     memcpy(attribute->attr.typeDescriptor,
         idNode->leftmostSibling->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor,
         sizeof(TypeDescriptor) );
@@ -243,22 +244,26 @@ void declareFunction(AST_NODE* declarationNode)
 }
 
 void processBlockNode(AST_NODE* blockNode)
-{
+{   //If it's a NUL_NULL or an empty blockNode, return immediately.
+    if( blockNode->nodeType == NUL_NODE || blockNode->child == NULL )
+        return;
+    
     AST_NODE *listNode = blockNode->child;
     while( listNode != NULL ){
+        AST_NODE *child;
         switch(listNode->nodeType){
             case VARIABLE_DECL_LIST_NODE:
                 processDeclarationListNode(listNode);
                 break;
             case STMT_LIST_NODE:
-                AST_NODE *child = listNode->child;
+                child = listNode->child;
                 while( child != NULL ){
                     processStmtNode(child);
                     child = child->rightSibling;
                 }
                 break;
         }
-        listNode = listNode->leftmostSibling;
+        listNode = listNode->rightSibling;
     }
     return;
 }
@@ -267,65 +272,107 @@ void processStmtNode(AST_NODE* stmtNode)
 {
     switch(stmtNode->semantic_value.stmtSemanticValue.kind){
         case WHILE_STMT:
-            checkWhileStmt(stmtNode);
+            processWhileStmt(stmtNode);
             break;
         case FOR_STMT:
-            checkForStmt(stmtNode);
+            processForStmt(stmtNode);
             break;
         case ASSIGN_STMT:
-            checkAssignmentStmt(stmtNode);
+            processAssignmentStmt(stmtNode);
             break;
         case IF_STMT:
-            checkIfStmt(stmtNode);
+            processIfStmt(stmtNode);
             break;
         case FUNCTION_CALL_STMT:
-            checkFunctionCall(stmtNode);
+            processFunctionCall(stmtNode);
             break;
         case RETURN_STMT:
-            checkReturnStmt(stmtNode);
+            processReturnStmt(stmtNode);
             break;
     }
     return;
 }
 
-void checkAssignOrExpr(AST_NODE* assignOrExprRelatedNode)
+void processAssignOrExpr(AST_NODE* assignOrExprRelatedNode)
 {
 
 }
 
-void checkWhileStmt(AST_NODE* whileNode)
+void processWhileStmt(AST_NODE* whileNode)
+{
+    processAssignmentStmt(whileNode->child);
+    openScope();
+    processBlockNode(whileNode->child->rightSibling);
+    closeScope();
+    return;
+}
+
+void processAssignmentList(AST_NODE *assignmentListNode){
+    if( assignmentListNode->nodeType == NUL_NODE )
+        return;
+    AST_NODE *assignStmtNode = assignmentListNode->child;
+    while( assignStmtNode != NULL ){
+        processAssignmentStmt(assignStmtNode);
+        assignStmtNode = assignStmtNode->rightSibling;
+    }
+    return;
+}
+
+void processRelopList(AST_NODE *relopListNode){
+    if( relopListNode->nodeType == NUL_NODE )
+        return;
+    AST_NODE *relopNode = relopListNode->child;
+    while( relopNode != NULL ){
+        processRelopList(relopListNode);
+        relopNode = relopNode->rightSibling;
+    }
+    return;
+}
+
+void processForStmt(AST_NODE* forNode)
+{   
+    processAssignmentList(forNode->child);
+    processRelopList(forNode->child->rightSibling);
+    processAssignmentList(forNode->child->rightSibling->rightSibling);
+    openScope();
+    processBlockNode(forNode->child->rightSibling->rightSibling->rightSibling);
+    closeScope();
+    return;
+}
+
+
+void processAssignmentStmt(AST_NODE* assignmentNode)
+{
+    
+}
+
+
+void processIfStmt(AST_NODE* ifNode)
+{
+    processAssignmentStmt(ifNode->child);                            //assignment(condition)
+    openScope();
+    processBlockNode(ifNode->child->rightSibling);                 //"then" block
+    closeScope();
+    openScope();
+    processBlockNode(ifNode->child->rightSibling->rightSibling);   //"else" block
+    closeScope();
+    return;
+}
+
+void processWriteFunction(AST_NODE* functionCallNode)
+{
+}
+
+void processFunctionCall(AST_NODE* functionCallNode)
+{
+}
+
+void processParameterPassing(Parameter* formalParameter, AST_NODE* actualParameter)
 {
 }
 
 
-void checkForStmt(AST_NODE* forNode)
-{
-}
-
-
-void checkAssignmentStmt(AST_NODE* assignmentNode)
-{
-}
-
-
-void checkIfStmt(AST_NODE* ifNode)
-{
-}
-
-void checkWriteFunction(AST_NODE* functionCallNode)
-{
-}
-
-void checkFunctionCall(AST_NODE* functionCallNode)
-{
-}
-
-void checkParameterPassing(Parameter* formalParameter, AST_NODE* actualParameter)
-{
-}
-
-
-void processExprRelatedNode(AST_NODE* exprRelatedNode)
+void processRelopNode(AST_NODE* relopNode)
 {
 }
 
@@ -357,7 +404,7 @@ void processConstValueNode(AST_NODE* constValueNode)
 }
 
 
-void checkReturnStmt(AST_NODE* returnNode)
+void processReturnStmt(AST_NODE* returnNode)
 {
 }
 
