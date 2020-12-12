@@ -62,6 +62,8 @@ typedef enum ErrorMsgKind
     RETURN_ARRAY
 } ErrorMsgKind;
 
+#define NONE "\033[m"
+#define RED "\033[0;32;31m"
 void printErrorMsg(AST_NODE* node, char* str, ErrorMsgKind errorMsgKind)
 {
     g_anyErrorOccur = 1;
@@ -70,67 +72,67 @@ void printErrorMsg(AST_NODE* node, char* str, ErrorMsgKind errorMsgKind)
     switch(errorMsgKind)
     {
         case SYMBOL_UNDECLARED:
-            printf("\'%s\' was not declared in this scope\n", node->semantic_value.identifierSemanticValue.identifierName);
+            printf(RED "\'%s\' was not declared in this scope\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case SYMBOL_IS_NOT_TYPE:    // self-defined
-            printf("\'%s\' was not declared as type\n", node->semantic_value.identifierSemanticValue.identifierName);
+            printf(RED "\'%s\' was not declared as type\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case SYMBOL_REDECLARED:
-            printf("redeclaration of \'%s\'\n", node->semantic_value.identifierSemanticValue.identifierName);
+            printf(RED "redeclaration of \'%s\'\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case ARRAY_SIZE_NOT_INT:
-            printf("The size of array should be an integer.\n");
+            printf(RED "The size of array should be an integer.\n" NONE);
             break;
         case ARRAY_SIZE_NEGATIVE:
-            printf("size of array \'%s\' is negative.\n", node->semantic_value.identifierSemanticValue.identifierName);
+            printf(RED "size of array \'%s\' is negative.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case ARRAY_SUBSCRIPT_NOT_INT:
-            printf("Array subscript is not integer.\n");
+            printf(RED "Array subscript is not integer.\n" NONE);
             break;
         case NOT_ASSIGNABLE:
-            printf("\'%s\' is not assignable.\n", node->semantic_value.identifierSemanticValue.identifierName);
+            printf(RED "\'%s\' is not assignable.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case NOT_REFERABLE:
-            printf("\'%s\' is not referable.\n", node->semantic_value.identifierSemanticValue.identifierName);
+            printf(RED "\'%s\' is not referable.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case INCOMPATIBLE_ARRAY_DIMENSION_DECL_GT_REF:
-            printf("assignment to expression with array type.\n");
+            printf(RED "assignment to expression with array type.\n" NONE);
             break;
         case INCOMPATIBLE_ARRAY_DIMENSION_DECL_LT_REF:
-            printf("subscripted value is neither array nor pointer.\n");
+            printf(RED "subscripted value is neither array nor pointer.\n" NONE);
             break;
         case TRY_TO_INIT_ARRAY:
-            printf("array can't be initialized.\n");
+            printf(RED "array can't be initialized.\n" NONE);
             break;
         case ASSIGN_NON_CONST_TO_GLOBAL:
-            printf("initializer element is not constant.\n");
+            printf(RED "initializer element is not constant.\n" NONE);
             break;
         case NOT_FUNCTION_NAME:
-            printf("called obhect \'%s\' is not a function or function pointer.\n", node->semantic_value.identifierSemanticValue.identifierName);
+            printf(RED "called obhect \'%s\' is not a function or function pointer.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case TOO_FEW_ARGUMENT:
-            printf("too few argument to function \'%s\'.\n", node->semantic_value.identifierSemanticValue.identifierName);
+            printf(RED "too few argument to function \'%s\'.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case TOO_MANY_ARGUMENT:
-            printf("too many argument to function \'%s\'.\n", node->semantic_value.identifierSemanticValue.identifierName);
+            printf(RED "too many argument to function \'%s\'.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case PASS_SCALAR_TO_ARRAY:
-            printf("invalid conversion from \'%s\' to \'%s\' array.\n", str, &str[6]);
+            printf(RED "invalid conversion from \'%s\' to \'%s\' array.\n" NONE, str, &str[6]);
             break;
         case PASS_ARRAY_TO_SCALAR:
-            printf("invalid conversion from \'%s\' array to \'%s\'.\n", str, &str[6]);
+            printf(RED "invalid conversion from \'%s\' array to \'%s\'.\n" NONE, str, &str[6]);
             break;
         case PARAMETER_TYPE_UNMATCH:
-            printf("unmatch parameter type.\n");
+            printf(RED "unmatch parameter type.\n" NONE);
             break;
         case RETURN_TYPE_UNMATCH:
-            printf("return type unmatch.\n");
+            printf(RED "return type unmatch.\n" NONE);
             break;
         case RETURN_ARRAY:
-            printf("return array.\n");
+            printf(RED "return array.\n" NONE);
             break;
         default:
-            printf("Unhandled case in void printErrorMsg(AST_NODE* node, char* name, ERROR_MSG_KIND* errorMsgKind)\n");
+            printf(RED "Unhandled case in void printErrorMsg(AST_NODE* node, char* name, ERROR_MSG_KIND* errorMsgKind)\n" NONE);
             break;
     }
     
@@ -858,6 +860,7 @@ void processVariableLValue(AST_NODE* idNode)
     SymbolTableEntry *entry = retrieveSymbol(idNode->semantic_value.identifierSemanticValue.identifierName);
     if( entry == NULL ){
         printErrorMsg(idNode, NULL, SYMBOL_UNDECLARED);
+        return;
     }
     else if( entry->attribute->attributeKind != VARIABLE_ATTRIBUTE ){
         printErrorMsg(idNode, NULL, NOT_ASSIGNABLE);
