@@ -57,7 +57,9 @@ typedef enum ErrorMsgKind
     TOO_MANY_ARGUMENT,
     PASS_SCALAR_TO_ARRAY,
     PASS_ARRAY_TO_SCALAR,
-    PARAMETER_TYPE_UNMATCH
+    PARAMETER_TYPE_UNMATCH,
+    RETURN_TYPE_UNMATCH,
+    RETURN_ARRAY
 } ErrorMsgKind;
 
 void printErrorMsg(AST_NODE* node, char* str, ErrorMsgKind errorMsgKind)
@@ -120,7 +122,12 @@ void printErrorMsg(AST_NODE* node, char* str, ErrorMsgKind errorMsgKind)
             break;
         case PARAMETER_TYPE_UNMATCH:
             printf("unmatch parameter type.\n");
-            fflush(stdout);
+            break;
+        case RETURN_TYPE_UNMATCH:
+            printf("return type unmatch.\n");
+            break;
+        case RETURN_ARRAY:
+            printf("return array.\n");
             break;
         default:
             printf("Unhandled case in void printErrorMsg(AST_NODE* node, char* name, ERROR_MSG_KIND* errorMsgKind)\n");
@@ -574,6 +581,11 @@ void processIfStmt(AST_NODE* ifNode)
 
 void processReadFunction(AST_NODE *functioncallNode)
 {
+    
+}
+
+void processfReadFunction(AST_NODE *functioncallNode)
+{
 
 }
 
@@ -591,6 +603,10 @@ void processFunctionCall(AST_NODE* functionCallNode)
     else if( strcmp("read", functionCallNode->child->semantic_value.identifierSemanticValue.identifierName) == 0 ){
         processReadFunction(functionCallNode);
         functionCallNode->dataType = INT_TYPE;
+    }
+    else if( strcmp("fread", functionCallNode->child->semantic_value.identifierSemanticValue.identifierName) == 0 ){
+        processReadFunction(functionCallNode);
+        functionCallNode->dataType = FLOAT_TYPE;
     }
     else{
         SymbolTableEntry *funcEntry = retrieveSymbol(functionCallNode->child->semantic_value.identifierSemanticValue.identifierName);
@@ -693,6 +709,9 @@ void checkParamNodeType(TypeDescriptor *curFormalType, AST_NODE *curActual, int 
             else if( curFormalType->properties.arrayProperties.elementType == FLOAT_TYPE )
                 strncpy(&str[6], "float", 5);
             printErrorMsg(curActual, str, PASS_SCALAR_TO_ARRAY);
+        }
+        else{
+            curActual->dataType = curFormalType->properties.dataType;   //convert to type as formal param
         }
     }
     return;
@@ -907,32 +926,47 @@ void processVariableRValue(AST_NODE* idNode)
 }
 
 void processReturnStmt(AST_NODE* returnNode)
-{
-}
+{   
+    AST_NODE *ancestor = returnNode->parent;
+    while( ! (ancestor->nodeType == DECLARATION_NODE && ancestor->semantic_value.declSemanticValue.kind == FUNCTION_DECL ) ){
+        ancestor = ancestor->parent;
+    }
+    if( returnNode->child == NULL ){
+        if( ancestor->child->dataType != VOID_TYPE )
+            printErrorMsg(returnNode, NULL, RETURN_TYPE_UNMATCH);
+    }
+    else if( ancestor->child->dataType == VOID_TYPE ){
+        printErrorMsg(returnNode, NULL, RETURN_TYPE_UNMATCH);
+    }
+    else{
+        if( returnNode->child->nodeType == IDENTIFIER_NODE ){
+            SymbolTableEntry *returnIDEntry = retrieveSymbol(returnNode->child->semantic_value.identifierSemanticValue.identifierName);
+            if( returnIDEntry == NULL ){
+                processVariableRValue(returnNode->child);
+                return;
+            }
 
-
-
-void processGeneralNode(AST_NODE *node)
-{
-}
-
-void processDeclDimList(AST_NODE* idNode, TypeDescriptor* typeDescriptor, int ignoreFirstDimSize)
-{
-}
-
-void processExprNode(AST_NODE* exprNode)
-{
-}
-
-void processConstValueNode(AST_NODE* constValueNode)
-{
-}
-
-void evaluateExprValue(AST_NODE* exprNode)
-{
-}
-
-void processAssignOrExpr(AST_NODE* assignOrExprRelatedNode)
-{
-
+            int idDim = 0, nodeDim = 0;
+            if( returnIDEntry->attribute->attr.typeDescriptor->kind == ARRAY_TYPE_DESCRIPTOR )
+                idDim = returnIDEntry->attribute->attr.typeDescriptor->properties.arrayProperties.dimension;
+            
+            AST_NODE *dimNode = returnNode->child->child;
+            while( dimNode != NULL ){
+                nodeDim++;
+                dimNode = dimNode->rightSibling;
+            }
+            if( nodeDim < idDim ){
+                printErrorMsg(returnNode, NULL, RETURN_ARRAY);
+                return;
+            }
+            else{
+                processVariableRValue(returnNode->child);
+                returnNode->child->dataType = ancestor->child->dataType;
+                return;
+            }
+        }
+        processVariableRValue(returnNode->child);
+        returnNode->child->dataType = ancestor->child->dataType;
+    }
+    return;
 }
