@@ -34,12 +34,16 @@ void getExprOrConstValue(AST_NODE* exprOrConstNode, int* iValue, float* fValue);
 void evaluateExprValue(AST_NODE* exprNode);
 void processDeclarationListNode(AST_NODE* declarationNode);
 SymbolAttribute *makeFunctionAttribute(AST_NODE *idNode);
+int processConstExprNode(AST_NODE *constExprNode);
+void makeItConstNode(AST_NODE *constExprNode, int num);
 
 typedef enum ErrorMsgKind
 {
     SYMBOL_UNDECLARED,
     SYMBOL_IS_NOT_TYPE,
-    SYMBOL_REDECLARED
+    SYMBOL_REDECLARED,
+    ARRAY_SIZE_NOT_INT,
+    ARRAY_SIZE_NEGATIVE
 } ErrorMsgKind;
 
 void printErrorMsg(AST_NODE* node, char* name, ErrorMsgKind errorMsgKind)
@@ -57,6 +61,12 @@ void printErrorMsg(AST_NODE* node, char* name, ErrorMsgKind errorMsgKind)
             break;
         case SYMBOL_REDECLARED:
             printf("redeclaration of \'%s\'\n", node->semantic_value.identifierSemanticValue.identifierName);
+            break;
+        case ARRAY_SIZE_NOT_INT:
+            printf("The size of array should be an integer.\n");
+            break;
+        case ARRAY_SIZE_NEGATIVE:
+            printf("The size of array should be positive.\n");
             break;
         default:
             printf("Unhandled case in void printErrorMsg(AST_NODE* node, char* name, ERROR_MSG_KIND* errorMsgKind)\n");
@@ -98,7 +108,6 @@ DATA_TYPE getBiggerType(DATA_TYPE dataType1, DATA_TYPE dataType2)
 
 void processProgramNode(AST_NODE *programNode)
 {
-    // walk tree
     AST_NODE *child = programNode->child;
     while(child != NULL) {
         switch(child->nodeType) {
@@ -165,13 +174,109 @@ SymbolAttribute *makeSymbolAttribute(AST_NODE *idNode) //return the attribute of
     attribute->attr.typeDescriptor = (TypeDescriptor *)malloc(sizeof(TypeDescriptor));
     memcpy(attribute->attr.typeDescriptor,
         idNode->leftmostSibling->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor,
-        sizeof(TypeDescriptor) );
+        sizeof(TypeDescriptor) );    
     if(idNode->semantic_value.identifierSemanticValue.kind == ARRAY_ID) {
-        /*TODO*/
+        if(attribute->attr.typeDescriptor->kind == SCALAR_TYPE_DESCRIPTOR){
+            DATA_TYPE dataType = attribute->attr.typeDescriptor->properties.dataType;
+            attribute->attr.typeDescriptor->kind = ARRAY_TYPE_DESCRIPTOR;
+            attribute->attr.typeDescriptor->properties.arrayProperties.dimension = 0;
+            attribute->attr.typeDescriptor->properties.arrayProperties.elementType = dataType;   
+        }
+
+        int IDdim = 0;          //e.g. int A[3][4], IDdim = 2
+        AST_NODE *dimNode = idNode->child;
+        while( dimNode != NULL ){
+            int isInt = processConstExprNode(dimNode);
+            if( isInt == 0 ){
+                printErrorMsg(dimNode, NULL, ARRAY_SIZE_NOT_INT);
+            }
+            else if( dimNode->semantic_value.const1->const_u.intval <= 0 ){
+                printErrorMsg(dimNode, NULL, ARRAY_SIZE_NEGATIVE);
+            }
+            IDdim++;
+            dimNode = dimNode->rightSibling;
+        }
+        
+        int *sizeInEachDimension = attribute->attr.typeDescriptor->properties.arrayProperties.sizeInEachDimension;  // new
+        int typedim = 0; // typedef int INT2[2][3]; INT2[2][3] arr[1]; typedim = 2 
+        if(attribute->attr.typeDescriptor->kind == ARRAY_TYPE_DESCRIPTOR) {
+            typedim = attribute->attr.typeDescriptor->properties.arrayProperties.dimension;
+        }
+        for( int i =  typedim - 1; i >= 0; i-- ){
+            sizeInEachDimension[i+IDdim] = sizeInEachDimension[i];
+        }
+        dimNode = idNode->child;
+        for( int i = 0; i < IDdim; i++ ){
+            sizeInEachDimension[i] = dimNode->semantic_value.const1->const_u.intval;
+            dimNode = dimNode->rightSibling;
+        }
+        attribute->attr.typeDescriptor->properties.arrayProperties.dimension += IDdim;
     }
+
     return attribute;
 }
 
+int processConstExprNode(AST_NODE *constExprNode)   //return whether the expression is INT
+{
+    if( constExprNode->nodeType == EXPR_NODE ){
+        int curNodeConst = 0;
+        int leftIsInt, rightIsInt = 1;
+        int isBinaryOp = ( constExprNode->semantic_value.exprSemanticValue.kind == BINARY_OPERATION )? 1 : 0;
+        leftIsInt = processConstExprNode(constExprNode->child);
+        if( isBinaryOp ) {
+            rightIsInt = processConstExprNode(constExprNode->child->rightSibling);
+        }
+        if( leftIsInt == 0 || rightIsInt == 0 ){
+            makeItConstNode(constExprNode, 0);  // error, but let the node to be 0 => arr[0]
+            return 0;
+        }
+        int lVal, rVal;
+        lVal = constExprNode->child->semantic_value.const1->const_u.intval;
+        if( isBinaryOp ) {
+            rVal = constExprNode->child->rightSibling->semantic_value.const1->const_u.intval;
+            switch (constExprNode->semantic_value.exprSemanticValue.op.binaryOp){
+                case BINARY_OP_ADD:
+                    curNodeConst = lVal + rVal;
+                    break;
+                case BINARY_OP_SUB:
+                    curNodeConst = lVal - rVal;
+                    break;
+                case BINARY_OP_MUL:
+                    curNodeConst = lVal * rVal;
+                    break;
+                case BINARY_OP_DIV:
+                    curNodeConst = lVal / rVal;
+                    break;
+                default:
+                    break;
+            }
+        }
+        else {
+            switch (constExprNode->semantic_value.exprSemanticValue.op.unaryOp){
+                case UNARY_OP_NEGATIVE:
+                    curNodeConst = -lVal;
+                    break;
+                default:
+                    break;
+            }
+        }
+        makeItConstNode(constExprNode, curNodeConst);
+    }
+    if( constExprNode->nodeType == CONST_VALUE_NODE && constExprNode->semantic_value.const1->const_type == INTEGERC ){
+        return 1;
+    }
+    return 0;
+}
+
+void makeItConstNode(AST_NODE *constExprNode, int num)
+{
+    constExprNode->nodeType = CONST_VALUE_NODE;
+    constExprNode->dataType = INT_TYPE;
+    constExprNode->semantic_value.const1 = (CON_Type *)malloc(sizeof(CON_Type));
+    constExprNode->semantic_value.const1->const_type = INTEGERC;
+    constExprNode->semantic_value.const1->const_u.intval = num;
+    return;
+}
 
 void declareIdList(AST_NODE* declarationNode, int ignoreArrayFirstDimSize)
 {
@@ -262,6 +367,8 @@ void processBlockNode(AST_NODE* blockNode)
                     child = child->rightSibling;
                 }
                 break;
+            default:
+                break;
         }
         listNode = listNode->rightSibling;
     }
@@ -343,7 +450,7 @@ void processForStmt(AST_NODE* forNode)
 
 void processAssignmentStmt(AST_NODE* assignmentNode)
 {
-    
+
 }
 
 
