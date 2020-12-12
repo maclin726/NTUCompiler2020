@@ -641,9 +641,11 @@ void checkParamNodeType(TypeDescriptor *curFormalType, AST_NODE *curActual, int 
         SymbolTableEntry *actualEntry = retrieveSymbol(curActual->semantic_value.identifierSemanticValue.identifierName);
         if( actualEntry == NULL ){
             printErrorMsg(curActual, NULL, SYMBOL_UNDECLARED);
+            curActual->dataType = ERROR_TYPE;
         }
         else if( actualEntry->attribute->attributeKind != VARIABLE_ATTRIBUTE ){
             printErrorMsg(curActual, NULL, NOT_REFERABLE);
+            curActual->dataType = ERROR_TYPE;
         }
         else{
             int actualDim = 0, formalDim = 0;
@@ -661,6 +663,9 @@ void checkParamNodeType(TypeDescriptor *curFormalType, AST_NODE *curActual, int 
             AST_NODE *dimNode = curActual->child;
             while( dimNode != NULL ){
                 actualDim--;
+                processVariableRValue(dimNode);
+                if( dimNode->dataType != INT_TYPE && dimNode->dataType != ERROR_TYPE)
+                    printErrorMsg(dimNode, NULL, ARRAY_SUBSCRIPT_NOT_INT);
                 dimNode = dimNode->rightSibling;
             }
 
@@ -840,7 +845,7 @@ void checkIdDimension(AST_NODE *idNode, SymbolTableEntry *entry)
     AST_NODE *dimNode = idNode->child;
     while( dimNode != NULL ){
         processVariableRValue(dimNode);
-        if( dimNode->dataType != INT_TYPE )
+        if( dimNode->dataType != INT_TYPE && dimNode->dataType != ERROR_TYPE)
             printErrorMsg(dimNode, NULL, ARRAY_SUBSCRIPT_NOT_INT);
         dimNode = dimNode->rightSibling;
     }
@@ -860,10 +865,13 @@ void processVariableLValue(AST_NODE* idNode)
     SymbolTableEntry *entry = retrieveSymbol(idNode->semantic_value.identifierSemanticValue.identifierName);
     if( entry == NULL ){
         printErrorMsg(idNode, NULL, SYMBOL_UNDECLARED);
+        idNode->dataType = ERROR_TYPE;
         return;
     }
     else if( entry->attribute->attributeKind != VARIABLE_ATTRIBUTE ){
         printErrorMsg(idNode, NULL, NOT_ASSIGNABLE);
+        idNode->dataType = ERROR_TYPE;
+        return;
     }
     checkIdDimension(idNode, entry);
     return;
@@ -918,9 +926,11 @@ void processVariableRValue(AST_NODE* idNode)
             entry = retrieveSymbol(idNode->semantic_value.identifierSemanticValue.identifierName);
             if( entry == NULL ){
                 printErrorMsg(idNode, NULL, SYMBOL_UNDECLARED);
+                idNode->dataType = ERROR_TYPE;
             }
             else if( entry->attribute->attributeKind != VARIABLE_ATTRIBUTE ){
                 printErrorMsg(idNode, NULL, NOT_REFERABLE);
+                idNode->dataType = ERROR_TYPE;
             }
             else{
                 checkIdDimension(idNode, entry);
