@@ -136,27 +136,11 @@ void printErrorMsg(AST_NODE* node, char* str, ErrorMsgKind errorMsgKind)
     
 }
 
-/*void printErrorMsg(AST_NODE* node, ErrorMsgKind errorMsgKind)
-{
-    g_anyErrorOccur = 1;
-    printf("Error found in line %d\n", node->linenumber);
-    
-    switch(errorMsgKind)
-    {
-
-        default:
-            printf("Unhandled case in void printErrorMsg(AST_NODE* node, ERROR_MSG_KIND* errorMsgKind)\n");
-            break;
-    }
-    
-}*/
-
 void semanticAnalysis(AST_NODE *root)
 {
     processProgramNode(root);
     return;
 }
-
 
 DATA_TYPE getBiggerType(DATA_TYPE dataType1, DATA_TYPE dataType2)
 {
@@ -536,12 +520,17 @@ void processAssignmentStmt(AST_NODE* assignmentNode)
 {
     switch(assignmentNode->nodeType){
         case STMT_NODE:             // e.g. a = b
-            processVariableLValue(assignmentNode->child);
-            processVariableRValue(assignmentNode->child->rightSibling);
-            if( assignmentNode->child->dataType == FLOAT_TYPE ){
-                assignmentNode->child->rightSibling->dataType = FLOAT_TYPE;
+            if( assignmentNode->semantic_value.stmtSemanticValue.kind == FUNCTION_CALL_STMT ){
+                processFunctionCall(assignmentNode);
             }
-            assignmentNode->dataType = assignmentNode->child->dataType;
+            else{
+                processVariableLValue(assignmentNode->child);
+                processVariableRValue(assignmentNode->child->rightSibling);
+                if( assignmentNode->child->dataType == FLOAT_TYPE ){
+                    assignmentNode->child->rightSibling->dataType = FLOAT_TYPE;
+                }
+                assignmentNode->dataType = assignmentNode->child->dataType;
+            }
             break;
         case EXPR_NODE:
             if( isRelOp(assignmentNode->semantic_value.exprSemanticValue) ){        //while(a < b)
@@ -581,17 +570,33 @@ void processIfStmt(AST_NODE* ifNode)
 
 void processReadFunction(AST_NODE *functioncallNode)
 {
-    
+    if( functioncallNode->child->rightSibling->nodeType != NUL_NODE ){
+        printErrorMsg(functioncallNode->child, NULL, TOO_MANY_ARGUMENT);
+    }
+    return;
 }
 
-void processfReadFunction(AST_NODE *functioncallNode)
+void processFreadFunction(AST_NODE *functioncallNode)
 {
-
+    if( functioncallNode->child->rightSibling->nodeType != NUL_NODE ){
+        printErrorMsg(functioncallNode->child, NULL, TOO_MANY_ARGUMENT);
+    }
+    return;
 }
 
 void processWriteFunction(AST_NODE* functionCallNode)
 {
-
+    if( functionCallNode->child->rightSibling->nodeType == NUL_NODE ){                  // < 1 argument
+        printErrorMsg(functionCallNode->child, NULL, TOO_FEW_ARGUMENT);
+    }
+    else if( functionCallNode->child->rightSibling->child->rightSibling != NULL ){      // >= 2 argument
+        printErrorMsg(functionCallNode->child, NULL, TOO_MANY_ARGUMENT);
+    }
+    else{
+        AST_NODE *paramNode = functionCallNode->child->rightSibling->child;
+        processVariableRValue(paramNode);
+    }
+    return;
 }
 
 void processFunctionCall(AST_NODE* functionCallNode)
@@ -605,7 +610,7 @@ void processFunctionCall(AST_NODE* functionCallNode)
         functionCallNode->dataType = INT_TYPE;
     }
     else if( strcmp("fread", functionCallNode->child->semantic_value.identifierSemanticValue.identifierName) == 0 ){
-        processReadFunction(functionCallNode);
+        processFreadFunction(functionCallNode);
         functionCallNode->dataType = FLOAT_TYPE;
     }
     else{

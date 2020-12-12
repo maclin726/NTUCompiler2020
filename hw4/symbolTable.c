@@ -104,6 +104,15 @@ void initializeSymbolTable()
     attribute->attr.functionSignature->returnType = INT_TYPE;
     enterSymbol(SYMBOL_TABLE_SYS_LIB_READ, attribute);
 
+    // fread
+    attribute = (SymbolAttribute *)malloc(sizeof(SymbolAttribute));
+    attribute->attr.functionSignature = (FunctionSignature *)malloc(sizeof(FunctionSignature));
+    attribute->attributeKind = FUNCTION_SIGNATURE;
+    attribute->attr.functionSignature->parametersCount = 0;
+    attribute->attr.functionSignature->parameterList = NULL;
+    attribute->attr.functionSignature->returnType = FLOAT_TYPE;
+    enterSymbol(SYMBOL_TABLE_SYS_LIB_FREAD, attribute);
+
     // write
     attribute = (SymbolAttribute *)malloc(sizeof(SymbolAttribute));
     attribute->attr.functionSignature = (FunctionSignature *)malloc(sizeof(FunctionSignature));
