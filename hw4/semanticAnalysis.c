@@ -49,7 +49,9 @@ typedef enum ErrorMsgKind
     NOT_REFERABLE,
     IMCOMPATIBLE_ARRAY_DIMENSION_DECL_GT_REF,
     IMCOMPATIBLE_ARRAY_DIMENSION_DECL_LT_REF,
-    ARRAY_SUBSCRIPT_NOT_INT
+    ARRAY_SUBSCRIPT_NOT_INT,
+    TRY_TO_INIT_ARRAY,
+    ASSIGN_NON_CONST_TO_GLOBAL
 } ErrorMsgKind;
 
 void printErrorMsg(AST_NODE* node, char* name, ErrorMsgKind errorMsgKind)
@@ -72,7 +74,7 @@ void printErrorMsg(AST_NODE* node, char* name, ErrorMsgKind errorMsgKind)
             printf("The size of array should be an integer.\n");
             break;
         case ARRAY_SIZE_NEGATIVE:
-            printf("The size of array should be positive.\n");
+            printf("size of array \'%s\' is negative.\n", node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case ARRAY_SUBSCRIPT_NOT_INT:
             printf("Array subscript is not integer.\n");
@@ -88,6 +90,12 @@ void printErrorMsg(AST_NODE* node, char* name, ErrorMsgKind errorMsgKind)
             break;
         case IMCOMPATIBLE_ARRAY_DIMENSION_DECL_LT_REF:
             printf("subscripted value is neither array nor pointer.\n");
+            break;
+        case TRY_TO_INIT_ARRAY:
+            printf("array can't be initialized.\n");
+            break;
+        case ASSIGN_NON_CONST_TO_GLOBAL:
+            printf("initializer element is not constant.\n");
             break;
         default:
             printf("Unhandled case in void printErrorMsg(AST_NODE* node, char* name, ERROR_MSG_KIND* errorMsgKind)\n");
@@ -323,7 +331,26 @@ void declareIdList(AST_NODE* declarationNode)
         }
         else{
             printErrorMsg(idNode, NULL, SYMBOL_REDECLARED);
+            idNode = idNode->rightSibling;
+            continue;
         }
+        
+        if(idNode->semantic_value.identifierSemanticValue.kind == WITH_INIT_ID){
+            if( idNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor->kind == ARRAY_TYPE_DESCRIPTOR ){
+                printErrorMsg(idNode, NULL, TRY_TO_INIT_ARRAY);
+            }
+            else if( idNode->semantic_value.identifierSemanticValue.symbolTableEntry->nestingLevel == 0
+                && idNode->child->nodeType != CONST_VALUE_NODE  ){
+                printErrorMsg(idNode, NULL, ASSIGN_NON_CONST_TO_GLOBAL);
+            }
+            else{
+                processVariableRValue(idNode->child);
+                if( idNode->dataType == FLOAT_TYPE ){
+                    idNode->child->dataType = FLOAT_TYPE;
+                }
+            }
+        }
+
         idNode = idNode->rightSibling;
     }
     return;
