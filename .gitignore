@@ -18,3 +18,10 @@ hw3/src/test
 
 # hw4
 hw4/symbolTable.o
+hw4/lex.yy.c
+hw4/parser
+hw4/parser.output
+hw4/parser.tab.c
+hw4/parser.tab.h
+hw4/test
+hw4/test.c

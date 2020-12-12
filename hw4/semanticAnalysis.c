@@ -43,18 +43,24 @@ typedef enum ErrorMsgKind
     SYMBOL_UNDECLARED,
     SYMBOL_IS_NOT_TYPE,
     SYMBOL_REDECLARED,
+    NOT_FUNCTION_NAME,
     ARRAY_SIZE_NOT_INT,
     ARRAY_SIZE_NEGATIVE,
+    ARRAY_SUBSCRIPT_NOT_INT,
     NOT_ASSIGNABLE,
     NOT_REFERABLE,
-    IMCOMPATIBLE_ARRAY_DIMENSION_DECL_GT_REF,
-    IMCOMPATIBLE_ARRAY_DIMENSION_DECL_LT_REF,
-    ARRAY_SUBSCRIPT_NOT_INT,
+    INCOMPATIBLE_ARRAY_DIMENSION_DECL_GT_REF,
+    INCOMPATIBLE_ARRAY_DIMENSION_DECL_LT_REF,
     TRY_TO_INIT_ARRAY,
-    ASSIGN_NON_CONST_TO_GLOBAL
+    ASSIGN_NON_CONST_TO_GLOBAL,
+    TOO_FEW_ARGUMENT,
+    TOO_MANY_ARGUMENT,
+    PASS_SCALAR_TO_ARRAY,
+    PASS_ARRAY_TO_SCALAR,
+    PARAMETER_TYPE_UNMATCH
 } ErrorMsgKind;
 
-void printErrorMsg(AST_NODE* node, char* name, ErrorMsgKind errorMsgKind)
+void printErrorMsg(AST_NODE* node, char* str, ErrorMsgKind errorMsgKind)
 {
     g_anyErrorOccur = 1;
     printf("Error found in line %d: ", node->linenumber);
@@ -85,10 +91,10 @@ void printErrorMsg(AST_NODE* node, char* name, ErrorMsgKind errorMsgKind)
         case NOT_REFERABLE:
             printf("\'%s\' is not referable.\n", node->semantic_value.identifierSemanticValue.identifierName);
             break;
-        case IMCOMPATIBLE_ARRAY_DIMENSION_DECL_GT_REF:
+        case INCOMPATIBLE_ARRAY_DIMENSION_DECL_GT_REF:
             printf("assignment to expression with array type.\n");
             break;
-        case IMCOMPATIBLE_ARRAY_DIMENSION_DECL_LT_REF:
+        case INCOMPATIBLE_ARRAY_DIMENSION_DECL_LT_REF:
             printf("subscripted value is neither array nor pointer.\n");
             break;
         case TRY_TO_INIT_ARRAY:
@@ -96,6 +102,25 @@ void printErrorMsg(AST_NODE* node, char* name, ErrorMsgKind errorMsgKind)
             break;
         case ASSIGN_NON_CONST_TO_GLOBAL:
             printf("initializer element is not constant.\n");
+            break;
+        case NOT_FUNCTION_NAME:
+            printf("called obhect \'%s\' is not a function or function pointer.\n", node->semantic_value.identifierSemanticValue.identifierName);
+            break;
+        case TOO_FEW_ARGUMENT:
+            printf("too few argument to function \'%s\'.\n", node->semantic_value.identifierSemanticValue.identifierName);
+            break;
+        case TOO_MANY_ARGUMENT:
+            printf("too many argument to function \'%s\'.\n", node->semantic_value.identifierSemanticValue.identifierName);
+            break;
+        case PASS_SCALAR_TO_ARRAY:
+            printf("invalid conversion from \'%s\' to \'%s\' array.\n", str, &str[6]);
+            break;
+        case PASS_ARRAY_TO_SCALAR:
+            printf("invalid conversion from \'%s\' array to \'%s\'.\n", str, &str[6]);
+            break;
+        case PARAMETER_TYPE_UNMATCH:
+            printf("unmatch parameter type.\n");
+            fflush(stdout);
             break;
         default:
             printf("Unhandled case in void printErrorMsg(AST_NODE* node, char* name, ERROR_MSG_KIND* errorMsgKind)\n");
@@ -554,16 +579,173 @@ void processReadFunction(AST_NODE *functioncallNode)
 
 void processWriteFunction(AST_NODE* functionCallNode)
 {
+
 }
 
 void processFunctionCall(AST_NODE* functionCallNode)
 {
+    if( strcmp("write", functionCallNode->child->semantic_value.identifierSemanticValue.identifierName) == 0 ){
+        processWriteFunction(functionCallNode);
+        functionCallNode->dataType = INT_TYPE;
+    }
+    else if( strcmp("read", functionCallNode->child->semantic_value.identifierSemanticValue.identifierName) == 0 ){
+        processReadFunction(functionCallNode);
+        functionCallNode->dataType = INT_TYPE;
+    }
+    else{
+        SymbolTableEntry *funcEntry = retrieveSymbol(functionCallNode->child->semantic_value.identifierSemanticValue.identifierName);
+        if(funcEntry == NULL){
+            printErrorMsg(functionCallNode->child, NULL, SYMBOL_UNDECLARED);
+            functionCallNode->dataType = ERROR_TYPE;
+        }
+        else if( funcEntry->attribute->attributeKind != FUNCTION_SIGNATURE ){
+            printErrorMsg(functionCallNode->child, NULL, NOT_FUNCTION_NAME);
+            functionCallNode->dataType = ERROR_TYPE;
+        }
+        else{
+            processParameterPassing(funcEntry->attribute->attr.functionSignature->parameterList, 
+                                    functionCallNode->child->rightSibling);
+            functionCallNode->dataType = funcEntry->attribute->attr.functionSignature->returnType;
+        }
+    }
+    return;
+}
 
+//useTypeDescriptor = 1, then it's the case of single identifier; otherwise, it must be a scalar
+void checkParamNodeType(TypeDescriptor *curFormalType, AST_NODE *curActual, int useTypeDescriptor)
+{
+    if( useTypeDescriptor ){
+        SymbolTableEntry *actualEntry = retrieveSymbol(curActual->semantic_value.identifierSemanticValue.identifierName);
+        if( actualEntry == NULL ){
+            printErrorMsg(curActual, NULL, SYMBOL_UNDECLARED);
+        }
+        else if( actualEntry->attribute->attributeKind != VARIABLE_ATTRIBUTE ){
+            printErrorMsg(curActual, NULL, NOT_REFERABLE);
+        }
+        else{
+            int actualDim = 0, formalDim = 0;
+            if( curFormalType->kind == ARRAY_TYPE_DESCRIPTOR )
+                formalDim = curFormalType->properties.arrayProperties.dimension;
+
+            //compute actual dimension 
+            if( actualEntry->attribute->attr.typeDescriptor->kind == ARRAY_TYPE_DESCRIPTOR ){
+                actualDim = actualEntry->attribute->attr.typeDescriptor->properties.arrayProperties.dimension;
+                curActual->dataType = actualEntry->attribute->attr.typeDescriptor->properties.arrayProperties.elementType;
+            }
+            else{
+                curActual->dataType = actualEntry->attribute->attr.typeDescriptor->properties.dataType;
+            }
+            AST_NODE *dimNode = curActual->child;
+            while( dimNode != NULL ){
+                actualDim--;
+                dimNode = dimNode->rightSibling;
+            }
+
+            if( actualDim < 0 ){
+                printErrorMsg(curActual, NULL, INCOMPATIBLE_ARRAY_DIMENSION_DECL_LT_REF);
+            }
+            else if( formalDim == 0 && actualDim > 0 ){
+                char str[16] = {0};
+                if( curActual->dataType == INT_TYPE )
+                    strncpy(str, "int", 3);
+                else if( curActual->dataType == FLOAT_TYPE )
+                    strncpy(str, "float", 5);
+                if( curFormalType->properties.dataType == INT_TYPE )
+                    strncpy(&str[6], "int", 3);
+                else if( curFormalType->properties.dataType == FLOAT_TYPE )
+                    strncpy(&str[6], "float", 5);
+                printErrorMsg(curActual, str, PASS_ARRAY_TO_SCALAR);
+            }
+            else if ( formalDim > 0 && actualDim == 0){
+                char str[16] = {0};
+                if( curActual->dataType == INT_TYPE )
+                    strncpy(str, "int", 3);
+                else if( curActual->dataType == FLOAT_TYPE )
+                    strncpy(str, "float", 5);
+                if( curFormalType->properties.arrayProperties.elementType == INT_TYPE )
+                    strncpy(&str[6], "int", 3);
+                else if( curFormalType->properties.arrayProperties.elementType == FLOAT_TYPE )
+                    strncpy(&str[6], "float", 5);
+                printErrorMsg(curActual, str, PASS_SCALAR_TO_ARRAY);
+            }
+            else if( formalDim != actualDim ){
+                printErrorMsg(curActual, NULL, PARAMETER_TYPE_UNMATCH);
+            }
+            else{
+                if( curFormalType->kind == SCALAR_TYPE_DESCRIPTOR ){
+                    curActual->dataType = curFormalType->properties.dataType;
+                }
+                else{
+                    curActual->dataType = curFormalType->properties.arrayProperties.elementType;
+                }
+            }
+        }
+    }
+    else{
+        if( curFormalType->kind == ARRAY_TYPE_DESCRIPTOR ){
+            char str[16] = {0};
+            if( curActual->dataType == INT_TYPE )
+                strncpy(str, "int", 3);
+            else if( curActual->dataType == FLOAT_TYPE )
+                strncpy(str, "float", 5);
+            if( curFormalType->properties.arrayProperties.elementType == INT_TYPE )
+                strncpy(&str[6], "int", 3);
+            else if( curFormalType->properties.arrayProperties.elementType == FLOAT_TYPE )
+                strncpy(&str[6], "float", 5);
+            printErrorMsg(curActual, str, PASS_SCALAR_TO_ARRAY);
+        }
+    }
+    return;
 }
 
 void processParameterPassing(Parameter* formalParameter, AST_NODE* actualParameter)
 {
+    if( actualParameter->nodeType == NUL_NODE && formalParameter != NULL ){
+        printErrorMsg(actualParameter->leftmostSibling, NULL, TOO_FEW_ARGUMENT);
+        return;
+    }
 
+    Parameter *curFormal = formalParameter;
+    AST_NODE *curActual = actualParameter->child;
+    while( curFormal != NULL && curActual != NULL ){
+        switch(curActual->nodeType){
+            case CONST_VALUE_NODE:      //func(1)
+                updateConstNodeType(curActual);
+                checkParamNodeType(curFormal->type, curActual, 0);
+                break;
+            case EXPR_NODE:
+                if( isRelOp(curActual->semantic_value.exprSemanticValue) ){     //e.g. func( a>b )
+                    processRelopNode(curActual->child);
+                    if( curActual->child->rightSibling ){       //binary op, process right child
+                        processRelopNode(curActual->child->rightSibling);
+                    }
+                    curActual->dataType = INT_TYPE;
+                }
+                else{                   //e.g. func(a+b);
+                    processVariableRValue(curActual);
+                }
+                checkParamNodeType(curFormal->type, curActual, 0);
+                break;
+            case IDENTIFIER_NODE:       //e.g. func(a), might pass an array or a scalar
+                checkParamNodeType(curFormal->type, curActual, 1);
+                break;
+            case STMT_NODE:             //e.g. func(func(1))
+                processFunctionCall(curActual);
+                checkParamNodeType(curFormal->type, curActual, 0);
+                break;
+            default:
+                break;
+        }
+        curFormal = curFormal->next;
+        curActual = curActual->rightSibling;
+    }
+    if( curActual == NULL && curFormal != NULL ){
+        printErrorMsg(actualParameter->leftmostSibling, NULL, TOO_FEW_ARGUMENT);
+    }
+    else if( curActual != NULL && curFormal == NULL ){
+        printErrorMsg(actualParameter->leftmostSibling, NULL, TOO_MANY_ARGUMENT);
+    }
+    return;
 }
 
 void processRelopNode(AST_NODE* relopNode)
@@ -572,10 +754,10 @@ void processRelopNode(AST_NODE* relopNode)
         case CONST_VALUE_NODE:      //e.g. for(; 1; )
             updateConstNodeType(relopNode);
             break;
-        case EXPR_NODE:             //e.g. for(; a > b;)
-            if( isRelOp(relopNode->semantic_value.exprSemanticValue) ){
+        case EXPR_NODE:
+            if( isRelOp(relopNode->semantic_value.exprSemanticValue) ){     //e.g. for(; a > b;)
                 processRelopNode(relopNode->child);
-                if( relopNode->child->rightSibling ){
+                if( relopNode->child->rightSibling ){       //binary op, process right child
                     processRelopNode(relopNode->child->rightSibling);
                 }
                 relopNode->dataType = INT_TYPE;
@@ -623,10 +805,10 @@ void checkIdDimension(AST_NODE *idNode, SymbolTableEntry *entry)
         }
     }
     if( dimInEntry > dimInASTNode ){
-        printErrorMsg(idNode, NULL, IMCOMPATIBLE_ARRAY_DIMENSION_DECL_GT_REF);
+        printErrorMsg(idNode, NULL, INCOMPATIBLE_ARRAY_DIMENSION_DECL_GT_REF);
     }
     else if( dimInEntry < dimInASTNode ){
-        printErrorMsg(idNode, NULL, IMCOMPATIBLE_ARRAY_DIMENSION_DECL_LT_REF);
+        printErrorMsg(idNode, NULL, INCOMPATIBLE_ARRAY_DIMENSION_DECL_LT_REF);
     }
 
     AST_NODE *dimNode = idNode->child;
@@ -727,7 +909,6 @@ void processVariableRValue(AST_NODE* idNode)
 void processReturnStmt(AST_NODE* returnNode)
 {
 }
-
 
 
 
