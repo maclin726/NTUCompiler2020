@@ -81,13 +81,13 @@ void printErrorMsg(AST_NODE* node, char* str, ErrorMsgKind errorMsgKind)
             printf(RED "redeclaration of \'%s\'\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case ARRAY_SIZE_NOT_INT:
-            printf(RED "The size of array should be an integer.\n" NONE);
+            printf(RED "the size of array should be an integer.\n" NONE);
             break;
         case ARRAY_SIZE_NEGATIVE:
             printf(RED "size of array \'%s\' is negative.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case ARRAY_SUBSCRIPT_NOT_INT:
-            printf(RED "Array subscript is not integer.\n" NONE);
+            printf(RED "array subscript is not an integer.\n" NONE);
             break;
         case NOT_ASSIGNABLE:
             printf(RED "\'%s\' is not assignable.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
@@ -99,7 +99,7 @@ void printErrorMsg(AST_NODE* node, char* str, ErrorMsgKind errorMsgKind)
             printf(RED "assignment to expression with array type.\n" NONE);
             break;
         case INCOMPATIBLE_ARRAY_DIMENSION_DECL_LT_REF:
-            printf(RED "subscripted value is neither array nor pointer.\n" NONE);
+            printf(RED "subscripted value is neither array nor pointer nor vector.\n" NONE);
             break;
         case TRY_TO_INIT_ARRAY:
             printf(RED "array can't be initialized.\n" NONE);
@@ -132,7 +132,7 @@ void printErrorMsg(AST_NODE* node, char* str, ErrorMsgKind errorMsgKind)
             printf(RED "return array.\n" NONE);
             break;
         default:
-            printf(RED "Unhandled case in void printErrorMsg(AST_NODE* node, char* name, ERROR_MSG_KIND* errorMsgKind)\n" NONE);
+            printf(RED "unhandled case in void printErrorMsg(AST_NODE* node, char* name, ERROR_MSG_KIND* errorMsgKind)\n" NONE);
             break;
     }
     
@@ -338,6 +338,8 @@ void declareIdList(AST_NODE* declarationNode)
     AST_NODE *typeNode = declarationNode->child;
     AST_NODE *idNode = typeNode->rightSibling;
     processTypeNode(typeNode);
+    if(typeNode->dataType == ERROR_TYPE)
+        return;
     while(idNode != NULL) {
         idNode->dataType = typeNode->dataType;
 
@@ -959,7 +961,7 @@ void processReturnStmt(AST_NODE* returnNode)
     else{
         if( returnNode->child->nodeType == IDENTIFIER_NODE ){
             SymbolTableEntry *returnIDEntry = retrieveSymbol(returnNode->child->semantic_value.identifierSemanticValue.identifierName);
-            if( returnIDEntry == NULL ){
+            if( returnIDEntry == NULL || returnIDEntry->attribute->attributeKind == TYPE_ATTRIBUTE){
                 processVariableRValue(returnNode->child);
                 return;
             }
