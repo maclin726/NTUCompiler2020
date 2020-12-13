@@ -8,35 +8,36 @@
 int g_anyErrorOccur = 0;
 
 DATA_TYPE getBiggerType(DATA_TYPE dataType1, DATA_TYPE dataType2);
-void processProgramNode(AST_NODE *programNode);
-void declareIdList(AST_NODE* typeNode);
-void declareFunction(AST_NODE* returnTypeNode);
-void processDeclDimList(AST_NODE* variableDeclDimList, TypeDescriptor* typeDescriptor, int ignoreFirstDimSize);
+void processProgramNode(AST_NODE* programNode);
+void processDeclarationListNode(AST_NODE* declarationNode);
 void processTypeNode(AST_NODE* typeNode);
+SymbolAttribute *makeSymbolAttribute(AST_NODE* idNode);
+int processConstExprNode(AST_NODE* constExprNode);
+void makeItConstNode(AST_NODE* constExprNode, int num);
+void declareIdList(AST_NODE* declarationNode);
+SymbolAttribute *makeFunctionAttribute(AST_NODE *idNode);
+void declareFunction(AST_NODE* declarationNode);
 void processBlockNode(AST_NODE* blockNode);
 void processStmtNode(AST_NODE* stmtNode);
-void processGeneralNode(AST_NODE *node);
-void processAssignOrExpr(AST_NODE* assignOrExprRelatedNode);
 void processWhileStmt(AST_NODE* whileNode);
+void processAssignmentList(AST_NODE* assignmentListNode);
+void processRelopList(AST_NODE* relopListNode) ;
 void processForStmt(AST_NODE* forNode);
 void processAssignmentStmt(AST_NODE* assignmentNode);
 void processIfStmt(AST_NODE* ifNode);
+void processReadFunction(AST_NODE* functioncallNode);
+void processFreadFunction(AST_NODE* functioncallNode);
 void processWriteFunction(AST_NODE* functionCallNode);
 void processFunctionCall(AST_NODE* functionCallNode);
-void processRelopNode(AST_NODE* relopNode);
+void checkParamNodeType(TypeDescriptor* curFormalType, AST_NODE* curActual, int useTypeDescriptor);
 void processParameterPassing(Parameter* formalParameter, AST_NODE* actualParameter);
-void processReturnStmt(AST_NODE* returnNode);
-void processExprNode(AST_NODE* exprNode);
-void processVariableLValue(AST_NODE* idNode);
-void processVariableRValue(AST_NODE* idNode);
-void processConstValueNode(AST_NODE* constValueNode);
+void processRelopNode(AST_NODE* relopNode);
 void updateConstNodeType(AST_NODE* constNode);
-void evaluateExprValue(AST_NODE* exprNode);
-void processDeclarationListNode(AST_NODE* declarationNode);
-SymbolAttribute *makeFunctionAttribute(AST_NODE *idNode);
-int processConstExprNode(AST_NODE *constExprNode);
-void makeItConstNode(AST_NODE *constExprNode, int num);
+void checkIdDimension(AST_NODE* idNode, SymbolTableEntry* entry);
+void processVariableLValue(AST_NODE* idNode);
 int isRelOp(EXPRSemanticValue exprSemanticValue);
+void processVariableRValue(AST_NODE* idNode);
+void processReturnStmt(AST_NODE* returnNode);
 
 typedef enum ErrorMsgKind
 {
@@ -108,7 +109,7 @@ void printErrorMsg(AST_NODE* node, char* str, ErrorMsgKind errorMsgKind)
             printf(RED "initializer element is not constant.\n" NONE);
             break;
         case NOT_FUNCTION_NAME:
-            printf(RED "called obhect \'%s\' is not a function or function pointer.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
+            printf(RED "called object \'%s\' is not a function or function pointer.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
             break;
         case TOO_FEW_ARGUMENT:
             printf(RED "too few argument to function \'%s\'.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
@@ -215,7 +216,7 @@ void processTypeNode(AST_NODE* idNodeAsType)
 }
 
 //return the attribute of a VAR_DECL, FUNC_PARA_DECL or TYPE_DECL node
-SymbolAttribute *makeSymbolAttribute(AST_NODE *idNode)
+SymbolAttribute *makeSymbolAttribute(AST_NODE* idNode)
 {
     SymbolAttribute *attribute = (SymbolAttribute *)malloc(sizeof(SymbolAttribute));
     attribute->attributeKind = (idNode->parent->semantic_value.declSemanticValue.kind == TYPE_DECL)?TYPE_ATTRIBUTE : VARIABLE_ATTRIBUTE;
@@ -244,7 +245,7 @@ SymbolAttribute *makeSymbolAttribute(AST_NODE *idNode)
             if( isInt == 0 ){
                 printErrorMsg(idNode, NULL, ARRAY_SIZE_NOT_INT);
             }
-            else if( dimNode->semantic_value.const1->const_u.intval <= 0 ){
+            else if( dimNode->semantic_value.const1->const_u.intval < 0 ){
                 printErrorMsg(idNode, NULL, ARRAY_SIZE_NEGATIVE);
             }
             IDdim++;
@@ -270,7 +271,7 @@ SymbolAttribute *makeSymbolAttribute(AST_NODE *idNode)
     return attribute;
 }
 
-int processConstExprNode(AST_NODE *constExprNode)   //return whether the expression is INT
+int processConstExprNode(AST_NODE* constExprNode)   //return whether the expression is INT
 {
     if( constExprNode->nodeType == EXPR_NODE ){
         int curNodeConst = 0;
@@ -322,7 +323,7 @@ int processConstExprNode(AST_NODE *constExprNode)   //return whether the express
     return 0;
 }
 
-void makeItConstNode(AST_NODE *constExprNode, int num)
+void makeItConstNode(AST_NODE* constExprNode, int num)
 {
     constExprNode->nodeType = CONST_VALUE_NODE;
     constExprNode->dataType = INT_TYPE;
@@ -376,7 +377,7 @@ void declareIdList(AST_NODE* declarationNode)
     return;
 }
 
-SymbolAttribute *makeFunctionAttribute(AST_NODE *idNode){
+SymbolAttribute* makeFunctionAttribute(AST_NODE* idNode){
     SymbolAttribute *attribute = (SymbolAttribute *)malloc(sizeof(SymbolAttribute));
     attribute->attributeKind = FUNCTION_SIGNATURE;
     attribute->attr.functionSignature = (FunctionSignature *)malloc(sizeof(FunctionSignature));
@@ -485,7 +486,7 @@ void processWhileStmt(AST_NODE* whileNode)      //process assignment + block
     return;
 }
 
-void processAssignmentList(AST_NODE *assignmentListNode)   //process assignment list in for-loop
+void processAssignmentList(AST_NODE* assignmentListNode)   //process assignment list in for-loop
 {
     if( assignmentListNode->nodeType == NUL_NODE )
         return;
@@ -497,7 +498,7 @@ void processAssignmentList(AST_NODE *assignmentListNode)   //process assignment 
     return;
 }
 
-void processRelopList(AST_NODE *relopListNode)         //process relop list in for-loop
+void processRelopList(AST_NODE* relopListNode)         //process relop list in for-loop
 {
     if( relopListNode->nodeType == NUL_NODE )
         return;
@@ -572,7 +573,7 @@ void processIfStmt(AST_NODE* ifNode)
     return;
 }
 
-void processReadFunction(AST_NODE *functioncallNode)
+void processReadFunction(AST_NODE* functioncallNode)
 {
     if( functioncallNode->child->rightSibling->nodeType != NUL_NODE ){
         printErrorMsg(functioncallNode->child, NULL, TOO_MANY_ARGUMENT);
@@ -580,7 +581,7 @@ void processReadFunction(AST_NODE *functioncallNode)
     return;
 }
 
-void processFreadFunction(AST_NODE *functioncallNode)
+void processFreadFunction(AST_NODE* functioncallNode)
 {
     if( functioncallNode->child->rightSibling->nodeType != NUL_NODE ){
         printErrorMsg(functioncallNode->child, NULL, TOO_MANY_ARGUMENT);
@@ -637,7 +638,7 @@ void processFunctionCall(AST_NODE* functionCallNode)
 }
 
 //useTypeDescriptor = 1, then it's the case of single identifier; otherwise, it must be a scalar
-void checkParamNodeType(TypeDescriptor *curFormalType, AST_NODE *curActual, int useTypeDescriptor)
+void checkParamNodeType(TypeDescriptor* curFormalType, AST_NODE* curActual, int useTypeDescriptor)
 {
     if( useTypeDescriptor ){
         SymbolTableEntry *actualEntry = retrieveSymbol(curActual->semantic_value.identifierSemanticValue.identifierName);
@@ -821,7 +822,7 @@ void updateConstNodeType(AST_NODE* constNode)
     return;
 }
 
-void checkIdDimension(AST_NODE *idNode, SymbolTableEntry *entry)
+void checkIdDimension(AST_NODE* idNode, SymbolTableEntry* entry)
 {
     int dimInEntry = 0, dimInASTNode = 0;
     if( entry->attribute->attr.typeDescriptor->kind == ARRAY_TYPE_DESCRIPTOR ){
