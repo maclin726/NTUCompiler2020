@@ -242,10 +242,10 @@ SymbolAttribute *makeSymbolAttribute(AST_NODE *idNode)
         while( dimNode != NULL ){
             int isInt = processConstExprNode(dimNode);
             if( isInt == 0 ){
-                printErrorMsg(dimNode, NULL, ARRAY_SIZE_NOT_INT);
+                printErrorMsg(idNode, NULL, ARRAY_SIZE_NOT_INT);
             }
             else if( dimNode->semantic_value.const1->const_u.intval <= 0 ){
-                printErrorMsg(dimNode, NULL, ARRAY_SIZE_NEGATIVE);
+                printErrorMsg(idNode, NULL, ARRAY_SIZE_NEGATIVE);
             }
             IDdim++;
             dimNode = dimNode->rightSibling;
@@ -667,7 +667,7 @@ void checkParamNodeType(TypeDescriptor *curFormalType, AST_NODE *curActual, int 
                 actualDim--;
                 processVariableRValue(dimNode);
                 if( dimNode->dataType != INT_TYPE && dimNode->dataType != ERROR_TYPE)
-                    printErrorMsg(dimNode, NULL, ARRAY_SUBSCRIPT_NOT_INT);
+                    printErrorMsg(curActual, NULL, ARRAY_SUBSCRIPT_NOT_INT);
                 dimNode = dimNode->rightSibling;
             }
 
@@ -697,9 +697,6 @@ void checkParamNodeType(TypeDescriptor *curFormalType, AST_NODE *curActual, int 
                 else if( curFormalType->properties.arrayProperties.elementType == FLOAT_TYPE )
                     strncpy(&str[6], "float", 5);
                 printErrorMsg(curActual, str, PASS_SCALAR_TO_ARRAY);
-            }
-            else if( formalDim != actualDim ){
-                printErrorMsg(curActual, NULL, PARAMETER_TYPE_UNMATCH);
             }
             else{
                 if( curFormalType->kind == SCALAR_TYPE_DESCRIPTOR ){
@@ -848,7 +845,7 @@ void checkIdDimension(AST_NODE *idNode, SymbolTableEntry *entry)
     while( dimNode != NULL ){
         processVariableRValue(dimNode);
         if( dimNode->dataType != INT_TYPE && dimNode->dataType != ERROR_TYPE)
-            printErrorMsg(dimNode, NULL, ARRAY_SUBSCRIPT_NOT_INT);
+            printErrorMsg(idNode, NULL, ARRAY_SUBSCRIPT_NOT_INT);
         dimNode = dimNode->rightSibling;
     }
     
