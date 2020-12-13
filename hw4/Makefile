@@ -1,5 +1,5 @@
 TARGET = parser
-OBJECT = parser.tab.c parser.tab.o lex.yy.c alloc.o functions.o semanticAnalysis.o symbolTable.o
+OBJECT = parser.tab.c parser.tab.o lex.yy.c alloc.o functions.o semanticAnalysis.o symbolTable.o errorMsg.o
 OUTPUT = parser.output parser.tab.h
 CC = gcc -g
 LEX = flex
@@ -7,8 +7,8 @@ YACC = bison -v
 YACCFLAG = -d
 LIBS = -lfl 
 
-parser: parser.tab.o alloc.o functions.o symbolTable.o semanticAnalysis.o 
-	$(CC) -o $(TARGET) parser.tab.o alloc.o functions.o symbolTable.o semanticAnalysis.o $(LIBS)
+parser: parser.tab.o alloc.o functions.o symbolTable.o errorMsg.o semanticAnalysis.o 
+	$(CC) -o $(TARGET) parser.tab.o alloc.o functions.o symbolTable.o errorMsg.o semanticAnalysis.o $(LIBS)
 
 parser.tab.o: parser.tab.c lex.yy.c alloc.o functions.c symbolTable.o semanticAnalysis.o
 	$(CC) -c parser.tab.c
@@ -18,6 +18,9 @@ semanticAnalysis.o: semanticAnalysis.c symbolTable.o
 
 symbolTable.o: symbolTable.c
 	$(CC) -c symbolTable.c
+
+errorMsg.o: errorMsg.c
+	$(CC) -c errorMsg.c
 
 lex.yy.c: lexer3.l
 	$(LEX) lexer3.l

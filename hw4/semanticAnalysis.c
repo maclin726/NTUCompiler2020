@@ -3,9 +3,10 @@
 #include <string.h>
 #include "header.h"
 #include "symbolTable.h"
+#include "errorMsg.h"
+
 // This file is for reference only, you are not required to follow the implementation. //
 // You only need to check for errors stated in the hw4 document. //
-int g_anyErrorOccur = 0;
 
 DATA_TYPE getBiggerType(DATA_TYPE dataType1, DATA_TYPE dataType2);
 void processProgramNode(AST_NODE* programNode);
@@ -39,105 +40,6 @@ int isRelOp(EXPRSemanticValue exprSemanticValue);
 void processVariableRValue(AST_NODE* idNode);
 void processReturnStmt(AST_NODE* returnNode);
 
-typedef enum ErrorMsgKind
-{
-    SYMBOL_UNDECLARED,
-    SYMBOL_IS_NOT_TYPE,
-    SYMBOL_REDECLARED,
-    NOT_FUNCTION_NAME,
-    ARRAY_SIZE_NOT_INT,
-    ARRAY_SIZE_NEGATIVE,
-    ARRAY_SUBSCRIPT_NOT_INT,
-    NOT_ASSIGNABLE,
-    NOT_REFERABLE,
-    INCOMPATIBLE_ARRAY_DIMENSION_DECL_GT_REF,
-    INCOMPATIBLE_ARRAY_DIMENSION_DECL_LT_REF,
-    TRY_TO_INIT_ARRAY,
-    ASSIGN_NON_CONST_TO_GLOBAL,
-    TOO_FEW_ARGUMENT,
-    TOO_MANY_ARGUMENT,
-    PASS_SCALAR_TO_ARRAY,
-    PASS_ARRAY_TO_SCALAR,
-    PARAMETER_TYPE_UNMATCH,
-    RETURN_TYPE_UNMATCH,
-    RETURN_ARRAY
-} ErrorMsgKind;
-
-#define NONE "\033[m"
-#define RED "\033[0;32;31m"
-void printErrorMsg(AST_NODE* node, char* str, ErrorMsgKind errorMsgKind)
-{
-    g_anyErrorOccur = 1;
-    printf("Error found in line %d: ", node->linenumber);
-    
-    switch(errorMsgKind)
-    {
-        case SYMBOL_UNDECLARED:
-            printf(RED "\'%s\' was not declared in this scope\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
-            break;
-        case SYMBOL_IS_NOT_TYPE:    // self-defined
-            printf(RED "\'%s\' was not declared as type\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
-            break;
-        case SYMBOL_REDECLARED:
-            printf(RED "redeclaration of \'%s\'\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
-            break;
-        case ARRAY_SIZE_NOT_INT:
-            printf(RED "the size of array should be an integer.\n" NONE);
-            break;
-        case ARRAY_SIZE_NEGATIVE:
-            printf(RED "size of array \'%s\' is negative.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
-            break;
-        case ARRAY_SUBSCRIPT_NOT_INT:
-            printf(RED "array subscript is not an integer.\n" NONE);
-            break;
-        case NOT_ASSIGNABLE:
-            printf(RED "\'%s\' is not assignable.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
-            break;
-        case NOT_REFERABLE:
-            printf(RED "\'%s\' is not referable.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
-            break;
-        case INCOMPATIBLE_ARRAY_DIMENSION_DECL_GT_REF:
-            printf(RED "assignment to expression with array type.\n" NONE);
-            break;
-        case INCOMPATIBLE_ARRAY_DIMENSION_DECL_LT_REF:
-            printf(RED "subscripted value is neither array nor pointer nor vector.\n" NONE);
-            break;
-        case TRY_TO_INIT_ARRAY:
-            printf(RED "array can't be initialized.\n" NONE);
-            break;
-        case ASSIGN_NON_CONST_TO_GLOBAL:
-            printf(RED "initializer element is not constant.\n" NONE);
-            break;
-        case NOT_FUNCTION_NAME:
-            printf(RED "called object \'%s\' is not a function or function pointer.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
-            break;
-        case TOO_FEW_ARGUMENT:
-            printf(RED "too few argument to function \'%s\'.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
-            break;
-        case TOO_MANY_ARGUMENT:
-            printf(RED "too many argument to function \'%s\'.\n" NONE, node->semantic_value.identifierSemanticValue.identifierName);
-            break;
-        case PASS_SCALAR_TO_ARRAY:
-            printf(RED "invalid conversion from \'%s\' to \'%s\' array.\n" NONE, str, &str[6]);
-            break;
-        case PASS_ARRAY_TO_SCALAR:
-            printf(RED "invalid conversion from \'%s\' array to \'%s\'.\n" NONE, str, &str[6]);
-            break;
-        case PARAMETER_TYPE_UNMATCH:
-            printf(RED "unmatch parameter type.\n" NONE);
-            break;
-        case RETURN_TYPE_UNMATCH:
-            printf(RED "return type unmatch.\n" NONE);
-            break;
-        case RETURN_ARRAY:
-            printf(RED "return array.\n" NONE);
-            break;
-        default:
-            printf(RED "unhandled case in void printErrorMsg(AST_NODE* node, char* name, ERROR_MSG_KIND* errorMsgKind)\n" NONE);
-            break;
-    }
-    
-}
 
 void semanticAnalysis(AST_NODE *root)
 {
@@ -524,11 +426,11 @@ void processForStmt(AST_NODE* forNode)      //for = assignment list + relop list
 void processAssignmentStmt(AST_NODE* assignmentNode)
 {
     switch(assignmentNode->nodeType){
-        case STMT_NODE:             // e.g. a = b
-            if( assignmentNode->semantic_value.stmtSemanticValue.kind == FUNCTION_CALL_STMT ){
+        case STMT_NODE:             
+            if( assignmentNode->semantic_value.stmtSemanticValue.kind == FUNCTION_CALL_STMT ){  //e.g. a = func();
                 processFunctionCall(assignmentNode);
             }
-            else{
+            else{       // e.g. a = b;
                 processVariableLValue(assignmentNode->child);
                 processVariableRValue(assignmentNode->child->rightSibling);
                 if( assignmentNode->child->dataType == FLOAT_TYPE ){
@@ -552,7 +454,7 @@ void processAssignmentStmt(AST_NODE* assignmentNode)
         case CONST_VALUE_NODE:      //e.g. while(1)
             updateConstNodeType(assignmentNode);
             break;
-        case IDENTIFIER_NODE:
+        case IDENTIFIER_NODE:       //e.g. while(a)
             processVariableRValue(assignmentNode);
             break;
         default:
@@ -637,7 +539,8 @@ void processFunctionCall(AST_NODE* functionCallNode)
     return;
 }
 
-//useTypeDescriptor = 1, then it's the case of single identifier; otherwise, it must be a scalar
+/* useTypeDescriptor = 1, then it's the case of single identifier(maybe with subscript); 
+   Otherwise, it must be a scalar */
 void checkParamNodeType(TypeDescriptor* curFormalType, AST_NODE* curActual, int useTypeDescriptor)
 {
     if( useTypeDescriptor ){
@@ -672,7 +575,7 @@ void checkParamNodeType(TypeDescriptor* curFormalType, AST_NODE* curActual, int 
                 dimNode = dimNode->rightSibling;
             }
 
-            if( actualDim < 0 ){
+            if( actualDim < 0 ){    //e.g. declare A[10] but use A[1][1] as param
                 printErrorMsg(curActual, NULL, INCOMPATIBLE_ARRAY_DIMENSION_DECL_LT_REF);
             }
             else if( formalDim == 0 && actualDim > 0 ){
@@ -699,7 +602,7 @@ void checkParamNodeType(TypeDescriptor* curFormalType, AST_NODE* curActual, int 
                     strncpy(&str[6], "float", 5);
                 printErrorMsg(curActual, str, PASS_SCALAR_TO_ARRAY);
             }
-            else{
+            else{       //convert type to the same as formal param
                 if( curFormalType->kind == SCALAR_TYPE_DESCRIPTOR ){
                     curActual->dataType = curFormalType->properties.dataType;
                 }
@@ -709,7 +612,7 @@ void checkParamNodeType(TypeDescriptor* curFormalType, AST_NODE* curActual, int 
             }
         }
     }
-    else{
+    else{   //actual param must be scalar
         if( curFormalType->kind == ARRAY_TYPE_DESCRIPTOR ){
             char str[16] = {0};
             if( curActual->dataType == INT_TYPE )
@@ -822,7 +725,7 @@ void updateConstNodeType(AST_NODE* constNode)
     return;
 }
 
-void checkIdDimension(AST_NODE* idNode, SymbolTableEntry* entry)
+void checkIdDimension(AST_NODE* idNode, SymbolTableEntry* entry)    //check if a subscripted id is a legel rvalue
 {
     int dimInEntry = 0, dimInASTNode = 0;
     if( entry->attribute->attr.typeDescriptor->kind == ARRAY_TYPE_DESCRIPTOR ){
@@ -956,7 +859,9 @@ void processReturnStmt(AST_NODE* returnNode)
     else if( ancestor->child->dataType == VOID_TYPE ){
         printErrorMsg(returnNode, NULL, RETURN_TYPE_UNMATCH);
     }
-    else{
+    else{       
+        /*  we don't call processVariableRValue here immediately, 
+            since the error message in return is different from that in processVariableRvalue.  */
         if( returnNode->child->nodeType == IDENTIFIER_NODE ){
             SymbolTableEntry *returnIDEntry = retrieveSymbol(returnNode->child->semantic_value.identifierSemanticValue.identifierName);
             if( returnIDEntry == NULL || returnIDEntry->attribute->attributeKind == TYPE_ATTRIBUTE){
