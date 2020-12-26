@@ -8,6 +8,7 @@
 #include <stdarg.h>
 #include "header.h"
 #include "symbolTable.h"
+#include "codeGen.h"
 int linenumber = 1;
 AST_NODE *prog;
 
@@ -873,6 +874,7 @@ char *argv[];
     symbolTableEnd();
     if (!g_anyErrorOccur) {
         printf("Parsing completed. No errors found.\n");
+        //gen_code(prog);
     }
 
   } /* main */

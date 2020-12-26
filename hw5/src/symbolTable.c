@@ -26,6 +26,7 @@ SymbolTableEntry* newSymbolTableEntry(char* symbolName, SymbolAttribute* attribu
     symbolTableEntry->attribute = attribute;    // not sure
     symbolTableEntry->name = symbolName;        // not sure
     symbolTableEntry->nestingLevel = nestingLevel;
+    symbolTableEntry->offset = 0;
     return symbolTableEntry;
 }
 
