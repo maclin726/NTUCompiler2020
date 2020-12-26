@@ -14,7 +14,7 @@ void processDeclarationListNode(AST_NODE* declarationNode);
 void processTypeNode(AST_NODE* typeNode);
 SymbolAttribute *makeSymbolAttribute(AST_NODE* idNode);
 int processConstExprNode(AST_NODE* constExprNode);
-void makeItConstNode(AST_NODE* constExprNode, int num);
+void makeItConstNode(AST_NODE* constExprNode, int inum, float fnum, int isInt);
 void declareIdList(AST_NODE* declarationNode);
 SymbolAttribute *makeFunctionAttribute(AST_NODE *idNode);
 void declareFunction(AST_NODE* declarationNode);
@@ -138,7 +138,7 @@ SymbolAttribute *makeSymbolAttribute(AST_NODE* idNode)
         AST_NODE *dimNode = idNode->child;
         
         if( dimNode != NULL && dimNode->nodeType == NUL_NODE ){
-            makeItConstNode(dimNode, 0);
+            makeItConstNode(dimNode, 0, 0, 0);
             IDdim++;
             dimNode = dimNode->rightSibling;
         }
@@ -184,7 +184,7 @@ int processConstExprNode(AST_NODE* constExprNode)   //return whether the express
             rightIsInt = processConstExprNode(constExprNode->child->rightSibling);
         }
         if( leftIsInt == 0 || rightIsInt == 0 ){
-            makeItConstNode(constExprNode, 0);  // error, but let the node to be 0 => arr[0]
+            makeItConstNode(constExprNode, 0, 0, 0);  // error, but let the node to be 0 => arr[0]
             return 0;
         }
         int lVal, rVal;
@@ -217,7 +217,7 @@ int processConstExprNode(AST_NODE* constExprNode)   //return whether the express
                     break;
             }
         }
-        makeItConstNode(constExprNode, curNodeConst);
+        makeItConstNode(constExprNode, curNodeConst, 0, 0);
     }
     if( constExprNode->nodeType == CONST_VALUE_NODE && constExprNode->semantic_value.const1->const_type == INTEGERC ){
         return 1;
@@ -225,14 +225,84 @@ int processConstExprNode(AST_NODE* constExprNode)   //return whether the express
     return 0;
 }
 
-void makeItConstNode(AST_NODE* constExprNode, int num)
+void makeItConstNode(AST_NODE* constExprNode, int inum, float fnum, int isInt)
 {
-    constExprNode->nodeType = CONST_VALUE_NODE;
-    constExprNode->dataType = INT_TYPE;
-    constExprNode->semantic_value.const1 = (CON_Type *)malloc(sizeof(CON_Type));
-    constExprNode->semantic_value.const1->const_type = INTEGERC;
-    constExprNode->semantic_value.const1->const_u.intval = num;
+    if( isInt ){
+        constExprNode->nodeType = CONST_VALUE_NODE;
+        constExprNode->dataType = INT_TYPE;
+        constExprNode->semantic_value.const1 = (CON_Type *)malloc(sizeof(CON_Type));
+        constExprNode->semantic_value.const1->const_type = INTEGERC;
+        constExprNode->semantic_value.const1->const_u.intval = inum;
+    }
+    else{
+        constExprNode->nodeType = CONST_VALUE_NODE;
+        constExprNode->dataType = FLOAT_TYPE;
+        constExprNode->semantic_value.const1 = (CON_Type *)malloc(sizeof(CON_Type));
+        constExprNode->semantic_value.const1->const_type = FLOATC;
+        constExprNode->semantic_value.const1->const_u.intval = fnum;
+    }
     return;
+}
+
+//return 0 if not const, 1 if const int, 2 if const float
+int processGlobalInitValue(AST_NODE *exprNode){
+    if( exprNode->nodeType == CONST_VALUE_NODE ){
+        if( exprNode->semantic_value.const1->const_type == INT_TYPE )
+            return 1;
+        else
+            return 2;
+    }
+    else if( exprNode->nodeType == EXPR_NODE ){
+        int curNodeConst = 0;
+        int leftIsConst, rightIsConst = 1;
+        int isBinaryOp = ( exprNode->semantic_value.exprSemanticValue.kind == BINARY_OPERATION )? 1 : 0;
+        leftIsConst = processGlobalInitValue(exprNode->child);
+        if( isBinaryOp ) {
+            rightIsConst = processGlobalInitValue(exprNode->child->rightSibling);
+        }
+        if( leftIsConst == 0 || rightIsConst == 0 ){    //error, not a const node
+            return 0;
+        }
+        float lVal, rVal;
+        lVal = exprNode->child->semantic_value.const1->const_u.intval;
+        if( isBinaryOp ) {
+            rVal = exprNode->child->rightSibling->semantic_value.const1->const_u.intval;
+            switch (exprNode->semantic_value.exprSemanticValue.op.binaryOp){
+                case BINARY_OP_ADD:
+                    curNodeConst = lVal + rVal;
+                    break;
+                case BINARY_OP_SUB:
+                    curNodeConst = lVal - rVal;
+                    break;
+                case BINARY_OP_MUL:
+                    curNodeConst = lVal * rVal;
+                    break;
+                case BINARY_OP_DIV:
+                    curNodeConst = lVal / rVal;
+                    break;
+                default:
+                    break;
+            }
+        }
+        else {
+            switch (exprNode->semantic_value.exprSemanticValue.op.unaryOp){
+                case UNARY_OP_NEGATIVE:
+                    curNodeConst = -lVal;
+                    break;
+                default:
+                    break;
+            }
+        }
+        if( leftIsConst == 2 || rightIsConst == 2 ){
+            makeItConstNode(exprNode, 0, curNodeConst, 0);
+            return 2;
+        }
+        else{
+            makeItConstNode(exprNode, curNodeConst, 0, 1);
+            return 1;
+        }
+    }
+    return 0;
 }
 
 //typedef, var decl, and param decl
@@ -262,9 +332,10 @@ void declareIdList(AST_NODE* declarationNode)
             if( idNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor->kind == ARRAY_TYPE_DESCRIPTOR ){
                 printErrorMsg(idNode, NULL, TRY_TO_INIT_ARRAY);
             }
-            else if( idNode->semantic_value.identifierSemanticValue.symbolTableEntry->nestingLevel == 0
-                && idNode->child->nodeType != CONST_VALUE_NODE  ){
-                printErrorMsg(idNode, NULL, ASSIGN_NON_CONST_TO_GLOBAL);
+            else if( idNode->semantic_value.identifierSemanticValue.symbolTableEntry->nestingLevel == 0 ){
+                processGlobalInitValue(idNode->child);
+                if( idNode->child->nodeType != CONST_VALUE_NODE )
+                    printErrorMsg(idNode, NULL, ASSIGN_NON_CONST_TO_GLOBAL);
             }
             else{
                 processVariableRValue(idNode->child);
