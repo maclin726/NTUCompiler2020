@@ -239,7 +239,7 @@ void makeItConstNode(AST_NODE* constExprNode, int inum, float fnum, int isInt)
         constExprNode->dataType = FLOAT_TYPE;
         constExprNode->semantic_value.const1 = (CON_Type *)malloc(sizeof(CON_Type));
         constExprNode->semantic_value.const1->const_type = FLOATC;
-        constExprNode->semantic_value.const1->const_u.intval = fnum;
+        constExprNode->semantic_value.const1->const_u.fval = fnum;
     }
     return;
 }
@@ -247,13 +247,16 @@ void makeItConstNode(AST_NODE* constExprNode, int inum, float fnum, int isInt)
 //return 0 if not const, 1 if const int, 2 if const float
 int processGlobalInitValue(AST_NODE *exprNode){
     if( exprNode->nodeType == CONST_VALUE_NODE ){
-        if( exprNode->semantic_value.const1->const_type == INT_TYPE )
+        if( exprNode->semantic_value.const1->const_type == INTEGERC ){
+            exprNode->dataType = INT_TYPE;
             return 1;
-        else
+        }
+        else{
+            exprNode->dataType = FLOAT_TYPE;
             return 2;
+        }
     }
     else if( exprNode->nodeType == EXPR_NODE ){
-        int curNodeConst = 0;
         int leftIsConst, rightIsConst = 1;
         int isBinaryOp = ( exprNode->semantic_value.exprSemanticValue.kind == BINARY_OPERATION )? 1 : 0;
         leftIsConst = processGlobalInitValue(exprNode->child);
@@ -263,43 +266,76 @@ int processGlobalInitValue(AST_NODE *exprNode){
         if( leftIsConst == 0 || rightIsConst == 0 ){    //error, not a const node
             return 0;
         }
-        float lVal, rVal;
-        lVal = exprNode->child->semantic_value.const1->const_u.intval;
-        if( isBinaryOp ) {
-            rVal = exprNode->child->rightSibling->semantic_value.const1->const_u.intval;
-            switch (exprNode->semantic_value.exprSemanticValue.op.binaryOp){
-                case BINARY_OP_ADD:
-                    curNodeConst = lVal + rVal;
-                    break;
-                case BINARY_OP_SUB:
-                    curNodeConst = lVal - rVal;
-                    break;
-                case BINARY_OP_MUL:
-                    curNodeConst = lVal * rVal;
-                    break;
-                case BINARY_OP_DIV:
-                    curNodeConst = lVal / rVal;
-                    break;
-                default:
-                    break;
+
+        if( leftIsConst == 1 && rightIsConst == 1 ){
+            int lVal, rVal, curNodeConst;
+            lVal = exprNode->child->semantic_value.const1->const_u.intval;
+            if( isBinaryOp ) {
+                rVal = exprNode->child->rightSibling->semantic_value.const1->const_u.intval;
+                switch (exprNode->semantic_value.exprSemanticValue.op.binaryOp){
+                    case BINARY_OP_ADD:
+                        curNodeConst = lVal + rVal;
+                        break;
+                    case BINARY_OP_SUB:
+                        curNodeConst = lVal - rVal;
+                        break;
+                    case BINARY_OP_MUL:
+                        curNodeConst = lVal * rVal;
+                        break;
+                    case BINARY_OP_DIV:
+                        curNodeConst = lVal / rVal;
+                        break;
+                    default:
+                        break;
+                }
             }
-        }
-        else {
-            switch (exprNode->semantic_value.exprSemanticValue.op.unaryOp){
-                case UNARY_OP_NEGATIVE:
-                    curNodeConst = -lVal;
-                    break;
-                default:
-                    break;
+            else {
+                switch (exprNode->semantic_value.exprSemanticValue.op.unaryOp){
+                    case UNARY_OP_NEGATIVE:
+                        curNodeConst = -lVal;
+                        break;
+                    default:
+                        break;
+                }
             }
-        }
-        if( leftIsConst == 2 || rightIsConst == 2 ){
-            makeItConstNode(exprNode, 0, curNodeConst, 0);
-            return 2;
-        }
-        else{
             makeItConstNode(exprNode, curNodeConst, 0, 1);
             return 1;
+        }
+        else{
+            float lVal, rVal, curNodeConst;
+            lVal = leftIsConst == 1 ? exprNode->child->semantic_value.const1->const_u.intval:
+                                      exprNode->child->semantic_value.const1->const_u.fval;
+            if( isBinaryOp ) {
+                rVal = rightIsConst == 1 ? exprNode->child->rightSibling->semantic_value.const1->const_u.intval:
+                                            exprNode->child->rightSibling->semantic_value.const1->const_u.fval;
+                switch (exprNode->semantic_value.exprSemanticValue.op.binaryOp){
+                    case BINARY_OP_ADD:
+                        curNodeConst = lVal + rVal;
+                        break;
+                    case BINARY_OP_SUB:
+                        curNodeConst = lVal - rVal;
+                        break;
+                    case BINARY_OP_MUL:
+                        curNodeConst = lVal * rVal;
+                        break;
+                    case BINARY_OP_DIV:
+                        curNodeConst = lVal / rVal;
+                        break;
+                    default:
+                        break;
+                }
+            }
+            else {
+                switch (exprNode->semantic_value.exprSemanticValue.op.unaryOp){
+                    case UNARY_OP_NEGATIVE:
+                        curNodeConst = -lVal;
+                        break;
+                    default:
+                        break;
+                }
+            }
+            makeItConstNode(exprNode, 0, curNodeConst, 0);
+            return 2;
         }
     }
     return 0;

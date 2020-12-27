@@ -94,7 +94,7 @@ void gen_block(AST_NODE *blockNode, int *ARoffset)
 void gen_head(char *funcName)
 {
     fprintf(output, ".test\n");
-    fprintf(output, "\t_start_%s:\n", funcName);
+    fprintf(output, "_start_%s:\n", funcName);
     return;
 }
 
@@ -176,13 +176,48 @@ void gen_funcDecl(AST_NODE* funcDeclNode)
     return;
 }
 
+void gen_global_var(AST_NODE* var_decl_list_node)
+{
+    fprintf(output, ".data\n");
+    AST_NODE *var_decl_node = var_decl_list_node->child;
+    while( var_decl_node != NULL ){
+
+        if( var_decl_node->semantic_value.declSemanticValue.kind == VARIABLE_DECL ) {
+            AST_NODE *variable = var_decl_node->child->rightSibling;
+            while( variable != NULL ){
+                SymbolTableEntry *entry = variable->semantic_value.identifierSemanticValue.symbolTableEntry;
+                int unit = 1;
+                if( entry->attribute->attr.typeDescriptor->kind == ARRAY_TYPE_DESCRIPTOR ){
+                    for( int i = 0; i < entry->attribute->attr.typeDescriptor->properties.arrayProperties.dimension; i++ ){
+                        unit *= entry->attribute->attr.typeDescriptor->properties.arrayProperties.sizeInEachDimension[i];
+                    }
+                }
+                fprintf(output, "_g_%s: .space %d\n", variable->semantic_value.identifierSemanticValue.identifierName, unit * 4);
+                if( variable->semantic_value.identifierSemanticValue.kind == WITH_INIT_ID ){
+                    if( variable->dataType == INT_TYPE && variable->child->dataType == INT_TYPE )
+                        fprintf(output, "\t.word %d\n", variable->child->semantic_value.const1->const_u.intval);
+                    else if( variable->dataType == INT_TYPE && variable->child->dataType == FLOAT_TYPE )
+                        fprintf(output, "\t.word %d\n", (int) variable->child->semantic_value.const1->const_u.fval);
+                    else if( variable->dataType == FLOAT_TYPE && variable->child->dataType == INT_TYPE )
+                        fprintf(output, "\t.word %f\n", (float) variable->child->semantic_value.const1->const_u.intval);
+                    else
+                        fprintf(output, "\t.word %f\n", variable->child->semantic_value.const1->const_u.fval);
+                }
+                variable = variable->rightSibling;
+            }
+            var_decl_node = var_decl_node->rightSibling;
+        }
+    }
+    
+}
+
 void gen_code(AST_NODE *root)
 {
     output = fopen("output.s", "w");
     AST_NODE *child = root->child;
     while( child != NULL ){
         if( child->nodeType == VARIABLE_DECL_LIST_NODE ){    //for global decl or typedef
-            
+            gen_global_var(child);
         }
         else{   //for function declaration
             gen_funcDecl(child);
