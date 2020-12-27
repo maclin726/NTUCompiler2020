@@ -375,9 +375,6 @@ void declareIdList(AST_NODE* declarationNode)
             }
             else{
                 processVariableRValue(idNode->child);
-                if( idNode->dataType == FLOAT_TYPE ){
-                    idNode->child->dataType = FLOAT_TYPE;
-                }
             }
         }
 

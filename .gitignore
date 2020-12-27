@@ -25,3 +25,8 @@ hw4/parser.tab.c
 hw4/parser.tab.h
 hw4/test
 hw4/test.c
+
+# hw5
+hw5/src/test.c
+hw5/src/output.s
+hw5/src/main.S
