@@ -435,7 +435,6 @@ void processBlockNode(AST_NODE* blockNode)
 {   //If it's a NUL_NULL or an empty blockNode, return immediately.
     if( blockNode->nodeType == NUL_NODE || blockNode->child == NULL )
         return;
-    
     AST_NODE *listNode = blockNode->child;
     while( listNode != NULL ){
         AST_NODE *child;
@@ -461,7 +460,9 @@ void processBlockNode(AST_NODE* blockNode)
 void processStmtNode(AST_NODE* stmtNode)
 {
     if( stmtNode->nodeType == BLOCK_NODE ){
+        openScope();
         processBlockNode(stmtNode);
+        closeScope();
     }
     else{
         switch(stmtNode->semantic_value.stmtSemanticValue.kind){
