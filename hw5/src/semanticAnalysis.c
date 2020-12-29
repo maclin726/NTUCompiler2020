@@ -460,25 +460,30 @@ void processBlockNode(AST_NODE* blockNode)
 
 void processStmtNode(AST_NODE* stmtNode)
 {
-    switch(stmtNode->semantic_value.stmtSemanticValue.kind){
-        case WHILE_STMT:
-            processWhileStmt(stmtNode);
-            break;
-        case FOR_STMT:
-            processForStmt(stmtNode);
-            break;
-        case ASSIGN_STMT:
-            processAssignmentStmt(stmtNode);
-            break;
-        case IF_STMT:
-            processIfStmt(stmtNode);
-            break;
-        case FUNCTION_CALL_STMT:
-            processFunctionCall(stmtNode);
-            break;
-        case RETURN_STMT:
-            processReturnStmt(stmtNode);
-            break;
+    if( stmtNode->nodeType == BLOCK_NODE ){
+        processBlockNode(stmtNode);
+    }
+    else{
+        switch(stmtNode->semantic_value.stmtSemanticValue.kind){
+            case WHILE_STMT:
+                processWhileStmt(stmtNode);
+                break;
+            case FOR_STMT:
+                processForStmt(stmtNode);
+                break;
+            case ASSIGN_STMT:
+                processAssignmentStmt(stmtNode);
+                break;
+            case IF_STMT:
+                processIfStmt(stmtNode);
+                break;
+            case FUNCTION_CALL_STMT:
+                processFunctionCall(stmtNode);
+                break;
+            case RETURN_STMT:
+                processReturnStmt(stmtNode);
+                break;
+        }
     }
     return;
 }
