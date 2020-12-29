@@ -543,9 +543,6 @@ void processAssignmentStmt(AST_NODE* assignmentNode)
             else{       // e.g. a = b;
                 processVariableLValue(assignmentNode->child);
                 processVariableRValue(assignmentNode->child->rightSibling);
-                if( assignmentNode->child->dataType == FLOAT_TYPE ){
-                    assignmentNode->child->rightSibling->dataType = FLOAT_TYPE;
-                }
                 assignmentNode->dataType = assignmentNode->child->dataType;
             }
             break;
