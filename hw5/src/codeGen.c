@@ -263,7 +263,41 @@ void gen_assign(AST_NODE *left, AST_NODE *right, int *ARoffset)
 {
     gen_expr(right, ARoffset);
     SymbolTableEntry *leftentry = left->semantic_value.identifierSemanticValue.symbolTableEntry;
-    if( leftentry->nestingLevel == 0 ){
+    if( leftentry->nestingLevel == 0 ){     //global variable assignment
+        if( left->dataType == INT_TYPE ){
+            int left_addr = get_reg(0);
+            if( right->place < 18 ){                //e.g. int a = 1;
+                fprintf(output, "\tla %s, _g_%s\n", int_reg[left_addr], leftentry->name);
+                fprintf(output, "\tsw %s, 0(%s)\n", int_reg[right->place], int_reg[left_addr]);
+                free_reg(0);
+            }
+            else{                                   //e.g. int a = 1.0;
+                int reg_convert = get_reg(0);
+                fprintf(output, "\tfcvt.w.s %s, %s, rtz\n", int_reg[reg_convert], float_reg[(right->place)-18]);
+                fprintf(output, "\tla %s, _g_%s\n", int_reg[left_addr], leftentry->name);
+                fprintf(output, "\tsw %s, 0(%s)\n", int_reg[reg_convert], int_reg[left_addr]);
+                free_reg(0);
+                free_reg(1);
+            }
+            free_reg(0);
+        }
+        else{
+            int left_addr = get_reg(0);
+            if( right->place < 18 ){                //e.g. float a = 1;
+                int reg_convert = get_reg(1);
+                fprintf(output, "\tfcvt.s.w %s, %s\n", float_reg[reg_convert-18], int_reg[right->place]);
+                fprintf(output, "\tla %s, _g_%s\n", int_reg[left_addr], leftentry->name);
+                fprintf(output, "\tfsw %s, 0(%s)\n", float_reg[reg_convert-18], int_reg[left_addr]);
+                free_reg(0);
+                free_reg(1);
+            }
+            else{                                   //e.g. float a = 1.0;
+                fprintf(output, "\tla %s, _g_%s\n", int_reg[left_addr], leftentry->name);
+                fprintf(output, "\tfsw %s, 0(%s)\n", float_reg[(right->place)-18], int_reg[left_addr]);
+                free_reg(1);
+            }
+            free_reg(0);
+        }
     }
     else{   //local variable assignment
         if( left->dataType == INT_TYPE ){
