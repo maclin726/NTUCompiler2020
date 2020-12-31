@@ -518,9 +518,7 @@ void processStmtNode(AST_NODE* stmtNode)
 void processWhileStmt(AST_NODE* whileNode)      //process assignment + block
 {
     processAssignmentStmt(whileNode->child);
-    openScope();
-    processBlockNode(whileNode->child->rightSibling);
-    closeScope();
+    processStmtNode(whileNode->child->rightSibling);
     return;
 }
 
@@ -829,7 +827,7 @@ void processRelopNode(AST_NODE* relopNode)
                 processVariableRValue(relopNode);
             }
             break;
-        case IDENTIFIER_NODE:       //e.g. for(; a; )
+        case IDENTIFIER_NODE:   case STMT_NODE:       //e.g. for(; a; )
             processVariableRValue(relopNode);
             break;
         default:
@@ -943,6 +941,7 @@ void processVariableRValue(AST_NODE* idNode)
         case EXPR_NODE:
             if( isRelOp(idNode->semantic_value.exprSemanticValue) ){
                 processRelopNode(idNode);
+                idNode->dataType = INT_TYPE;
             }
             else{
                 isBinaryOp = (idNode->semantic_value.exprSemanticValue.kind == BINARY_OPERATION);
