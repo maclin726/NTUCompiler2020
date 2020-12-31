@@ -4,9 +4,10 @@
 #include "symbolTable.h"
 
 void gen_function_call(AST_NODE *stmtNode, int *ARoffset);
-void gen_block(AST_NODE *blockNode, int *ARoffset);
+void gen_block(AST_NODE *blockNode, int *ARoffset, char *funcName);
 void gen_localVar(AST_NODE *blockNode, int *ARoffset);
 int isRelOp(EXPRSemanticValue exprSemanticValue);
+void gen_expr(AST_NODE *exprNode, int *ARoffset);
 
 FILE *output;
 
@@ -46,6 +47,51 @@ void free_reg(int type)
     else
         cur_float_reg = (cur_float_reg - 1 + 24) % 24;
     return;
+}
+
+int get_local_addr_register(AST_NODE *node, int *ARoffset)
+{
+    SymbolTableEntry *entry = node->semantic_value.identifierSemanticValue.symbolTableEntry;
+    int base_offset = entry->offset;
+    int target_addr_reg = get_reg(0);
+
+    if( entry->attribute->attr.typeDescriptor->kind == SCALAR_TYPE_DESCRIPTOR ){
+        fprintf(output, "\tli %s, %d\n", int_reg[target_addr_reg], -base_offset);
+        fprintf(output, "\tadd %s, fp, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg]);
+    }
+    else{
+        gen_expr(node->child, ARoffset);
+        fprintf(output, "\tli %s, 4\n", int_reg[target_addr_reg]);
+        fprintf(output, "\tmul %s, %s, %s\n", int_reg[target_addr_reg], int_reg[node->child->place], int_reg[target_addr_reg]);
+        fprintf(output, "\tli %s, %d\n", int_reg[node->child->place], -base_offset);
+        fprintf(output, "\tadd %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[node->child->place]);
+        
+        fprintf(output, "\tadd %s, fp, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg]);
+        free_reg(0);    //free node->child->place
+    }
+    return target_addr_reg;
+}
+
+int get_global_addr_register(AST_NODE *node, int *ARoffset){
+    SymbolTableEntry *entry = node->semantic_value.identifierSemanticValue.symbolTableEntry;
+
+    int target_addr_reg = get_reg(0);
+    int base_addr_reg = get_reg(0);
+    fprintf(output, "\tla %s, _g_%s\n", int_reg[base_addr_reg], node->semantic_value.identifierSemanticValue.identifierName);
+
+    if( entry->attribute->attr.typeDescriptor->kind == SCALAR_TYPE_DESCRIPTOR ){
+        fprintf(output, "\tmv %s, %s\n", int_reg[target_addr_reg], int_reg[base_addr_reg]);
+        free_reg(0);    //free base_addr_reg
+    }
+    else{
+        gen_expr(node->child, ARoffset);
+        fprintf(output, "\tli %s, 4\n", int_reg[target_addr_reg]);
+        fprintf(output, "\tmul %s, %s, %s\n", int_reg[target_addr_reg], int_reg[node->child->place], int_reg[target_addr_reg]);
+        fprintf(output, "\tadd %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[base_addr_reg]);
+        free_reg(0);    //free node->child->place
+        free_reg(0);    //free base_addr_reg
+    }
+    return target_addr_reg;
 }
 
 int gen_int_expr(int left_reg, int right_reg, AST_NODE *exprNode)
@@ -178,34 +224,37 @@ int gen_float_expr(int left_reg, int right_reg, AST_NODE *exprNode)
     }
     else{
         int zero_float_reg = get_reg(1);
-        free_reg(1);        //free left_reg
-        
         if( isRelOp(exprNode->semantic_value.exprSemanticValue) ){
-            exprNode->place = get_reg(0);
             switch( exprNode->semantic_value.exprSemanticValue.op.unaryOp ){
                 case UNARY_OP_LOGICAL_NEGATION:
                     fprintf(output, "\tfcvt.s.w %s, x0\n", float_reg[zero_float_reg-18]);
+                    free_reg(1);    // free zero_reg
+                    free_reg(1);    // free left_reg
+                    exprNode->place = get_reg(0);
                     fprintf(output, "\tfeq.s %s, %s, %s\n", int_reg[exprNode->place], float_reg[left_reg-18], float_reg[zero_float_reg-18]);
-                    //fprintf(output, "\tseqz %s, %s\n", int_reg[exprNode->place], int_reg[left_reg]);
                     break;
             }
         }
         else{
-            exprNode->place = get_reg(1);
             switch( exprNode->semantic_value.exprSemanticValue.op.unaryOp ){
                 case UNARY_OP_NEGATIVE:
                     fprintf(output, "\tfcvt.s.w %s, x0\n", float_reg[zero_float_reg-18]);
-                    fprintf(output, "\tfsub.s %s, %s, %s\n", float_reg[(exprNode->place)-18], float_reg[zero_float_reg-18], float_reg[(exprNode->place)-18]);
+                    free_reg(1);    // free zero_reg
+                    free_reg(1);    // free left_reg
+                    exprNode->place = get_reg(1);
+                    fprintf(output, "\tfsub.s %s, %s, %s\n", float_reg[(exprNode->place)-18], float_reg[zero_float_reg-18], float_reg[left_reg-18]);
                     break;
                 case UNARY_OP_POSITIVE:
                     fprintf(output, "\tfcvt.s.w %s, x0\n", float_reg[zero_float_reg-18]);
-                    fprintf(output, "\tadd.s %s, %s, %s\n", float_reg[(exprNode->place)-18], float_reg[zero_float_reg-18], float_reg[(exprNode->place)-18]);
+                    free_reg(1);    // free zero_reg
+                    free_reg(1);    // free left_reg
+                    exprNode->place = get_reg(1);
+                    fprintf(output, "\tadd.s %s, %s, %s\n", float_reg[(exprNode->place)-18], float_reg[zero_float_reg-18], float_reg[left_reg-18]);
                     break;
                 default:
                     break;
             }
         }
-        free_reg(1);        //free zero_reg
     }
 }
 
@@ -241,22 +290,27 @@ void gen_expr(AST_NODE *exprNode, int *ARoffset)
             if( exprNode->dataType == INT_TYPE ){
                 reg = get_reg(0);
                 if( entry->nestingLevel == 0 ){
-                    fprintf(output, "\tla %s, _g_%s\n", int_reg[reg], entry->name);
-                    fprintf(output, "\tlw %s, 0(%s)\n", int_reg[reg], int_reg[reg]);
+                    int target_addr_reg = get_global_addr_register(exprNode, ARoffset);
+                    fprintf(output, "\tlw %s, 0(%s)\n", int_reg[reg], int_reg[target_addr_reg]);
+                    free_reg(0);    //free target_addr_reg
                 }
-                else
-                    fprintf(output, "\tlw %s, -%d(fp)\n", int_reg[reg], entry->offset);
+                else{
+                    int target_addr_reg = get_local_addr_register(exprNode, ARoffset);
+                    fprintf(output, "\tlw %s, 0(%s)\n", int_reg[reg], int_reg[target_addr_reg]);
+                    free_reg(0);    //free target_addr_reg
+                }
             }
             else{
                 reg = get_reg(1);
                 if( entry->nestingLevel == 0 ){
-                    int reg_float_addr = get_reg(0);
-                    fprintf(output, "\tla %s, _g_%s\n", int_reg[reg_float_addr], entry->name);
-                    fprintf(output, "\tflw %s, 0(%s)\n", float_reg[reg-18], int_reg[reg_float_addr]);
-                    free_reg(0);
+                    int target_addr_reg = get_global_addr_register(exprNode, ARoffset);
+                    fprintf(output, "\tflw %s, 0(%s)\n", float_reg[reg-18], int_reg[target_addr_reg]);
+                    free_reg(0);    //free target_addr_reg
                 }
                 else{
-                    fprintf(output, "\tflw %s, -%d(fp)\n", float_reg[reg-18], entry->offset);
+                    int target_addr_reg = get_local_addr_register(exprNode, ARoffset);
+                    fprintf(output, "\tflw %s, 0(%s)\n", float_reg[reg-18], int_reg[target_addr_reg]);
+                    free_reg(0);    //free target_addr_reg
                 }
             }
             exprNode->place = reg;
@@ -301,7 +355,7 @@ void gen_expr(AST_NODE *exprNode, int *ARoffset)
     }
 }
 
-void gen_while(AST_NODE *stmtNode, int *ARoffset)
+void gen_while(AST_NODE *stmtNode, int *ARoffset, char *funcName)
 {
     int cur_while = total_while++;
     fprintf(output, "WHILE_test%d:\n", cur_while);
@@ -317,18 +371,18 @@ void gen_while(AST_NODE *stmtNode, int *ARoffset)
         free_reg(0);
         free_reg(1);
     }
-    gen_block(stmtNode->child->rightSibling, ARoffset);
+    gen_block(stmtNode->child->rightSibling, ARoffset, funcName);
     fprintf(output, "\tj WHILE_test%d\n", cur_while);
     fprintf(output, "WHILE_exit%d:\n", cur_while);
     return;
 }
 
-void gen_for(AST_NODE *stmtNode, int *ARoffset)
+void gen_for(AST_NODE *stmtNode, int *ARoffset, char *funcName)
 {
 
 }
 
-void gen_if(AST_NODE *stmtNode, int *ARoffset)
+void gen_if(AST_NODE *stmtNode, int *ARoffset, char *funcName)
 {
     int cur_if = total_if++;
     gen_expr(stmtNode->child, ARoffset);
@@ -343,10 +397,10 @@ void gen_if(AST_NODE *stmtNode, int *ARoffset)
         free_reg(0);
         free_reg(1);
     }
-    gen_block(stmtNode->child->rightSibling, ARoffset);
+    gen_block(stmtNode->child->rightSibling, ARoffset, funcName);
     fprintf(output, "\tj IF_exit%d\n", cur_if);
     fprintf(output, "IF_else%d:\n", cur_if);
-    gen_block(stmtNode->child->rightSibling->rightSibling, ARoffset);
+    gen_block(stmtNode->child->rightSibling->rightSibling, ARoffset, funcName);
     fprintf(output, "IF_exit%d:\n", cur_if);
     return;
 }
@@ -394,6 +448,44 @@ void gen_fread_call(AST_NODE *freadfunc)
     return;
 }
 
+void save_registers()
+{
+    for(int i = 0; i <= 6; ++i) {
+        fprintf(output, "\tsw   t%d, %d(sp)\n", i, -(i + 1) * 8);
+    }
+    for(int i = 0; i <= 7; ++i) {
+        fprintf(output, "\tsw   a%d, %d(sp)\n", i, -i * 8 - 64);
+    }
+    for(int i = 0; i <= 11; ++i) {
+        fprintf(output, "\tfsw   ft%d, %d(sp)\n", i, -i * 8 - 128);
+    }
+    for(int i = 0; i <= 7; ++i) {
+        fprintf(output, "\tfsw  fa%d, %d(sp)\n", i, -i * 8 - 224);
+    }
+
+    fprintf(output, "\taddi sp, sp, -280\n");
+    return;
+}
+
+void load_registers(int exclude_reg)        //ignore the exclude_reg storing return value
+{
+    fprintf(output, "\taddi sp, sp, 280\n");
+    for(int i = 0; i <= 6; ++i) {
+        if( exclude_reg != i && exclude_reg - 11 != i )
+            fprintf(output, "\tlw   t%d, %d(sp)\n", i, -(i + 1) * 8);
+    }
+    for(int i = 0; i <= 7; ++i) {
+        fprintf(output, "\tlw   a%d, %d(sp)\n", i, -i * 8 - 64);
+    }
+    for(int i = 0; i <= 11; ++i) {
+        if( exclude_reg - 18 != i && exclude_reg - 30 != i )
+        fprintf(output, "\tflw   ft%d, %d(sp)\n", i, -i * 8 - 128);
+    }
+    for(int i = 0; i <= 7; ++i) {
+        fprintf(output, "\tflw  fa%d, %d(sp)\n", i, -i * 8 - 224);
+    }
+    return;
+}
 
 void gen_function_call(AST_NODE *stmtNode, int *ARoffset)
 {
@@ -407,7 +499,17 @@ void gen_function_call(AST_NODE *stmtNode, int *ARoffset)
         gen_fread_call(stmtNode);
     }
     else{
-        fprintf(output, )
+        save_registers();
+        fprintf(output, "\tcall _start_%s\n", stmtNode->child->semantic_value.identifierSemanticValue.identifierName);
+        if( stmtNode->dataType == INT_TYPE ){
+            stmtNode->place = get_reg(0);
+            fprintf(output, "\tmv %s, a0\n", int_reg[stmtNode->place]);
+        }
+        else if( stmtNode->dataType == FLOAT_TYPE ){
+            stmtNode->place = get_reg(1);
+            fprintf(output, "\tfmv.s %s, fa0\n", float_reg[(stmtNode->place)-18]);
+        }
+        load_registers(stmtNode->place);
     }
 }
 
@@ -416,77 +518,103 @@ void gen_assign(AST_NODE *left, AST_NODE *right, int *ARoffset)
     gen_expr(right, ARoffset);
     SymbolTableEntry *leftentry = left->semantic_value.identifierSemanticValue.symbolTableEntry;
     if( leftentry->nestingLevel == 0 ){     //global variable assignment
+        int left_addr_reg = get_global_addr_register(left, ARoffset);
+        
         if( left->dataType == INT_TYPE ){
-            int left_addr = get_reg(0);
             if( right->place < 18 ){                //e.g. int a = 1;
-                fprintf(output, "\tla %s, _g_%s\n", int_reg[left_addr], leftentry->name);
-                fprintf(output, "\tsw %s, 0(%s)\n", int_reg[right->place], int_reg[left_addr]);
-                free_reg(0);
+                fprintf(output, "\tsw %s, 0(%s)\n", int_reg[right->place], int_reg[left_addr_reg]);
+                free_reg(0);    //free left_addr_reg
+                free_reg(0);    //free right expr
             }
             else{                                   //e.g. int a = 1.0;
                 int reg_convert = get_reg(0);
                 fprintf(output, "\tfcvt.w.s %s, %s, rtz\n", int_reg[reg_convert], float_reg[(right->place)-18]);
-                fprintf(output, "\tla %s, _g_%s\n", int_reg[left_addr], leftentry->name);
-                fprintf(output, "\tsw %s, 0(%s)\n", int_reg[reg_convert], int_reg[left_addr]);
-                free_reg(0);
-                free_reg(1);
+                fprintf(output, "\tsw %s, 0(%s)\n", int_reg[reg_convert], int_reg[left_addr_reg]);
+                free_reg(0);    //free convert
+                free_reg(0);    //free left_addr_reg
+                free_reg(1);    //free right expr
             }
-            free_reg(0);
         }
-        else{
-            int left_addr = get_reg(0);
+        else{   //left->dataType == FLOAT_TYPE
             if( right->place < 18 ){                //e.g. float a = 1;
                 int reg_convert = get_reg(1);
                 fprintf(output, "\tfcvt.s.w %s, %s\n", float_reg[reg_convert-18], int_reg[right->place]);
-                fprintf(output, "\tla %s, _g_%s\n", int_reg[left_addr], leftentry->name);
-                fprintf(output, "\tfsw %s, 0(%s)\n", float_reg[reg_convert-18], int_reg[left_addr]);
-                free_reg(0);
-                free_reg(1);
+                fprintf(output, "\tfsw %s, 0(%s)\n", float_reg[reg_convert-18], int_reg[left_addr_reg]);
+                free_reg(1);    //free convert
+                free_reg(0);    //free left addr
+                free_reg(0);    //free right expr
             }
             else{                                   //e.g. float a = 1.0;
-                fprintf(output, "\tla %s, _g_%s\n", int_reg[left_addr], leftentry->name);
-                fprintf(output, "\tfsw %s, 0(%s)\n", float_reg[(right->place)-18], int_reg[left_addr]);
-                free_reg(1);
+                fprintf(output, "\tfsw %s, 0(%s)\n", float_reg[(right->place)-18], int_reg[left_addr_reg]);
+                free_reg(0);    //free left addr
+                free_reg(1);    //free right expr
             }
-            free_reg(0);
         }
     }
     else{   //local variable assignment
+        int left_addr_reg = get_local_addr_register(left, ARoffset);
         if( left->dataType == INT_TYPE ){
             if( right->place < 18 ){                //e.g. int a = 1;
-                fprintf(output, "\tsw %s, -%d(fp)\n", int_reg[right->place], leftentry->offset);
-                free_reg(0);
+                fprintf(output, "\tsw %s, 0(%s)\n", int_reg[right->place], int_reg[left_addr_reg]);
+                free_reg(0);        //free left addr
+                free_reg(0);        //free right int expr
             }
             else{                                   //e.g. int a = 1.0;
                 int reg_convert = get_reg(0);
                 fprintf(output, "\tfcvt.w.s %s, %s, rtz\n", int_reg[reg_convert], float_reg[(right->place)-18]);
-                fprintf(output, "\tsw %s, -%d(fp)\n", int_reg[reg_convert], leftentry->offset);
-                free_reg(0);
-                free_reg(1);
+                fprintf(output, "\tsw %s, 0(%s)\n", int_reg[reg_convert], int_reg[left_addr_reg]);
+                free_reg(0);        //free right int expr
+                free_reg(0);        //free left addr
+                free_reg(1);        //free right float expr
             }
         }
         else{
             if( right->place < 18 ){                //e.g. float a = 1;
                 int reg_convert = get_reg(1);
                 fprintf(output, "\tfcvt.s.w %s, %s\n", float_reg[reg_convert-18], int_reg[right->place]);
-                fprintf(output, "\tfsw %s, -%d(fp)\n", float_reg[reg_convert-18], leftentry->offset);
-                free_reg(0);
-                free_reg(1);
+                fprintf(output, "\tfsw %s, 0(%s)\n", float_reg[reg_convert-18], int_reg[left_addr_reg]);
+                free_reg(1);        //free right float expr
+                free_reg(0);        //free left addr
+                free_reg(0);        //free right int expr
             }
             else{                                   //e.g. float a = 1.0;
-                fprintf(output, "\tfsw %s, -%d(fp)\n", float_reg[(right->place)-18], leftentry->offset);
-                free_reg(1);
+                fprintf(output, "\tfsw %s, 0(%s)\n", float_reg[(right->place)-18], int_reg[left_addr_reg]);
+                free_reg(0);        //free left addr
+                free_reg(1);        //free right float expr
             }
         }
     }
 }
 
-void gen_return(AST_NODE *stmtNode)
+void gen_return(AST_NODE *returnNode, int *ARoffset, char *funcName)
 {
-
+    if( returnNode->dataType == INT_TYPE ){
+        gen_expr(returnNode->child, ARoffset);
+        if( returnNode->child->dataType == INT_TYPE ){
+            fprintf(output, "\tmv a0, %s\n", int_reg[returnNode->child->place]);
+            free_reg(0);
+        }
+        else{
+            fprintf(output, "\tfcvt.w.s a0, %s\n", float_reg[(returnNode->child->place)-18]);
+            free_reg(1);
+        }
+    }
+    else if( returnNode->dataType == FLOAT_TYPE ){
+        gen_expr(returnNode->child, ARoffset);
+        if( returnNode->child->dataType == INT_TYPE ){
+            fprintf(output, "\tfcvt.s.w fa0, %s\n", int_reg[returnNode->child->place]);
+            free_reg(0);
+        }
+        else{
+            fprintf(output, "\tfmv.s fa0, %s\n", float_reg[(returnNode->child->place)-18]);
+            free_reg(1);
+        }
+    }
+    fprintf(output, "\tj _end_%s\n", funcName);
+    return;
 }
 
-void gen_block(AST_NODE *blockNode, int *ARoffset)
+void gen_block(AST_NODE *blockNode, int *ARoffset, char *funcName)
 {
     if( blockNode->child == NULL )
         return;
@@ -505,27 +633,31 @@ void gen_block(AST_NODE *blockNode, int *ARoffset)
     AST_NODE *stmtNode = stmtListNode->child;
     while( stmtNode != NULL ){
         if( stmtNode->nodeType == BLOCK_NODE ){
-            gen_block(stmtNode, ARoffset);
+            gen_block(stmtNode, ARoffset, funcName);
         }
         else if (stmtNode->nodeType != NUL_NODE){
             switch(stmtNode->semantic_value.stmtSemanticValue.kind){
                 case WHILE_STMT:
-                    gen_while(stmtNode, ARoffset);
+                    gen_while(stmtNode, ARoffset, funcName);
                     break;
                 case FOR_STMT:
-                    gen_for(stmtNode, ARoffset);
+                    gen_for(stmtNode, ARoffset, funcName);
                     break;
                 case IF_STMT:
-                    gen_if(stmtNode, ARoffset);
+                    gen_if(stmtNode, ARoffset, funcName);
                     break;
                 case FUNCTION_CALL_STMT:
                     gen_function_call(stmtNode, ARoffset);
+                    if( stmtNode->dataType == INT_TYPE )
+                        free_reg(0);
+                    else if( stmtNode->dataType == FLOAT_TYPE )
+                        free_reg(1);
                     break;
                 case ASSIGN_STMT:
                     gen_assign(stmtNode->child,stmtNode->child->rightSibling, ARoffset);
                     break;
                 case RETURN_STMT:
-                    gen_return(stmtNode);
+                    gen_return(stmtNode, ARoffset, funcName);
                     break;
             }
         }
@@ -606,7 +738,7 @@ void gen_epilogue(char *funcName, int size)
     fprintf(output, "\tld   fp, 0(fp)\n");
     fprintf(output, "\tjr   ra\n");
     fprintf(output, ".data\n");
-    fprintf(output, "\t_frameSize_%s: .word %d", funcName, size);
+    fprintf(output, "\t_frameSize_%s: .word %d\n", funcName, size);
     return;
 }
 
@@ -617,7 +749,7 @@ void gen_funcDecl(AST_NODE* funcDeclNode)
     AST_NODE *blockNode = funcDeclNode->child->rightSibling->rightSibling->rightSibling;
     gen_head(functionName);
     gen_prologue(functionName);
-    gen_block(blockNode, &ARoffset);
+    gen_block(blockNode, &ARoffset, functionName);
     gen_epilogue(functionName, ARoffset + 136);
     return;
 }
@@ -656,8 +788,8 @@ void gen_global_var(AST_NODE* var_decl_list_node)
 
                 variable = variable->rightSibling;
             }
-            var_decl_node = var_decl_node->rightSibling;
         }
+        var_decl_node = var_decl_node->rightSibling;
     }
     return;
 }

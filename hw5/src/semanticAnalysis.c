@@ -214,7 +214,7 @@ int processConstExprNode(AST_NODE* constExprNode)   //return whether the express
                 default:                                                        break;
             }
         }
-        makeItConstNode(constExprNode, curNodeConst, 0, 0);
+        makeItConstNode(constExprNode, curNodeConst, 0, 1);
     }
     if( constExprNode->nodeType == CONST_VALUE_NODE && constExprNode->semantic_value.const1->const_type == INTEGERC ){
         return 1;
@@ -988,6 +988,9 @@ void processReturnStmt(AST_NODE* returnNode)
     if( returnNode->child == NULL ){
         if( ancestor->child->dataType != VOID_TYPE )
             printErrorMsg(returnNode, NULL, RETURN_TYPE_UNMATCH);
+        else{
+            returnNode->dataType = VOID_TYPE;
+        }
     }
     else if( ancestor->child->dataType == VOID_TYPE ){
         printErrorMsg(returnNode, NULL, RETURN_TYPE_UNMATCH);
@@ -1017,12 +1020,12 @@ void processReturnStmt(AST_NODE* returnNode)
             }
             else{
                 processVariableRValue(returnNode->child);
-                returnNode->child->dataType = ancestor->child->dataType;
+                returnNode->dataType = ancestor->child->dataType;   //we store the return type in return->dataType
                 return;
             }
         }
         processVariableRValue(returnNode->child);
-        returnNode->child->dataType = ancestor->child->dataType;
+        returnNode->dataType = ancestor->child->dataType;   //we store the return type in return->dataType
     }
     return;
 }
