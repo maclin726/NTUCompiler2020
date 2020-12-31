@@ -13,6 +13,8 @@ int linenumber = 1;
 AST_NODE *prog;
 
 extern int g_anyErrorOccur;
+extern int yylex();
+extern int yyerror(char *s);
 
 static inline AST_NODE* makeSibling(AST_NODE *a, AST_NODE *b)
 { 

@@ -6,6 +6,7 @@
 void gen_function_call(AST_NODE *stmtNode, int *ARoffset);
 void gen_block(AST_NODE *blockNode, int *ARoffset);
 void gen_localVar(AST_NODE *blockNode, int *ARoffset);
+int isRelOp(EXPRSemanticValue exprSemanticValue);
 
 FILE *output;
 
@@ -47,6 +48,167 @@ void free_reg(int type)
     return;
 }
 
+int gen_int_expr(int left_reg, int right_reg, AST_NODE *exprNode)
+{
+    //left_reg and right_reg are two int register, generate the code and return the int_reg index that containing the result
+    if( exprNode->semantic_value.exprSemanticValue.kind == BINARY_OPERATION ){
+        free_reg(0);
+        free_reg(0);
+        exprNode->place = get_reg(0);
+        switch( exprNode->semantic_value.exprSemanticValue.op.binaryOp ){
+            case BINARY_OP_ADD:
+                fprintf(output, "\tadd %s, %s, %s\n", int_reg[exprNode->place], int_reg[left_reg], int_reg[right_reg]);
+                break;
+            case BINARY_OP_SUB:
+                fprintf(output, "\tsub %s, %s, %s\n", int_reg[exprNode->place], int_reg[left_reg], int_reg[right_reg]);
+                break;
+            case BINARY_OP_MUL:
+                fprintf(output, "\tmul %s, %s, %s\n", int_reg[exprNode->place], int_reg[left_reg], int_reg[right_reg]);
+                break;
+            case BINARY_OP_DIV:
+                fprintf(output, "\tdiv %s, %s, %s\n", int_reg[exprNode->place], int_reg[left_reg], int_reg[right_reg]);
+                break;
+            case BINARY_OP_AND:
+                //TODO
+                break;
+            case BINARY_OP_OR:
+                //TODO
+                break;
+            case BINARY_OP_EQ:
+                fprintf(output, "\tsub %s, %s, %s\n", int_reg[exprNode->place], int_reg[left_reg], int_reg[right_reg]);
+                fprintf(output, "\tseqz %s, %s\n", int_reg[exprNode->place], int_reg[exprNode->place]);
+                break;
+            case BINARY_OP_GE:
+                fprintf(output, "\tslt %s, %s, %s\n", int_reg[exprNode->place], int_reg[left_reg], int_reg[right_reg]);
+                fprintf(output, "\tseqz %s, %s\n", int_reg[exprNode->place], int_reg[exprNode->place]);
+                break;
+            case BINARY_OP_NE:
+                fprintf(output, "\tsub %s, %s, %s\n", int_reg[exprNode->place], int_reg[left_reg], int_reg[right_reg]);
+                fprintf(output, "\tsnez %s, %s\n", int_reg[exprNode->place], int_reg[exprNode->place]);
+                break;
+            case BINARY_OP_GT:
+                fprintf(output, "\tsgt %s, %s, %s\n", int_reg[exprNode->place], int_reg[left_reg], int_reg[right_reg]);
+                break;
+            case BINARY_OP_LE:
+                fprintf(output, "\tsgt %s, %s, %s\n", int_reg[exprNode->place], int_reg[left_reg], int_reg[right_reg]);
+                fprintf(output, "\tseqz %s, %s\n", int_reg[exprNode->place], int_reg[exprNode->place]);
+                break;
+            case BINARY_OP_LT:
+                fprintf(output, "\tslt %s, %s, %s\n", int_reg[exprNode->place], int_reg[left_reg], int_reg[right_reg]);
+                break;
+            default:
+                break;
+        }
+    }
+    else{
+        free_reg(0);
+        exprNode->place = get_reg(0);
+        switch(exprNode->semantic_value.exprSemanticValue.op.unaryOp){
+            case UNARY_OP_LOGICAL_NEGATION:
+                fprintf(output, "\tseqz %s, %s\n", int_reg[exprNode->place], int_reg[left_reg]);
+                break;
+            case UNARY_OP_NEGATIVE:
+                fprintf(output, "\tsub %s, x0, %s\n", int_reg[exprNode->place], int_reg[left_reg]);
+                break;
+            case UNARY_OP_POSITIVE:
+                fprintf(output, "\tmv %s, %s\n", int_reg[exprNode->place], int_reg[left_reg]);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+int gen_float_expr(int left_reg, int right_reg, AST_NODE *exprNode)
+{
+    /*left_reg and right_reg are two float register, generate the code and return int_reg(if it's arithmetic expr)
+       or float_reg(if it's relation/logic expr)  */
+    if( exprNode->semantic_value.exprSemanticValue.kind == BINARY_OPERATION ){
+        free_reg(1);
+        free_reg(1);
+        if( isRelOp(exprNode->semantic_value.exprSemanticValue) ){
+            exprNode->place = get_reg(0);
+            switch( exprNode->semantic_value.exprSemanticValue.op.binaryOp ){
+                case BINARY_OP_AND:
+                    //TODO
+                    break;
+                case BINARY_OP_OR:
+                    //TODO
+                    break;
+                case BINARY_OP_EQ:
+                    fprintf(output, "\tfeq.s %s, %s, %s\n", int_reg[exprNode->place], float_reg[left_reg-18], float_reg[right_reg-18]);
+                    break;
+                case BINARY_OP_GE:
+                    fprintf(output, "\tfge.s %s, %s, %s\n", int_reg[exprNode->place], float_reg[left_reg-18], float_reg[right_reg-18]);
+                    break;
+                case BINARY_OP_NE:
+                    fprintf(output, "\tfeq.s %s, %s, %s\n", int_reg[exprNode->place], float_reg[left_reg-18], float_reg[right_reg-18]);
+                    fprintf(output, "\tseqz %s, %s\n", int_reg[exprNode->place], int_reg[exprNode->place]);
+                    break;
+                case BINARY_OP_GT:
+                    fprintf(output, "\tfgt.s %s, %s, %s\n", int_reg[exprNode->place], float_reg[left_reg-18], float_reg[right_reg-18]);
+                    break;
+                case BINARY_OP_LE:
+                    fprintf(output, "\tfle.s %s, %s, %s\n", int_reg[exprNode->place], float_reg[left_reg-18], float_reg[right_reg-18]);
+                    break;
+                case BINARY_OP_LT:
+                    fprintf(output, "\tflt.s %s, %s, %s\n", int_reg[exprNode->place], float_reg[left_reg-18], float_reg[right_reg-18]);
+                    break;
+                default:
+                    break;
+            }
+        }
+        else{
+            exprNode->place = get_reg(1);
+            switch( exprNode->semantic_value.exprSemanticValue.op.binaryOp ){
+                case BINARY_OP_ADD:
+                    fprintf(output, "\tfadd.s %s, %s, %s\n", float_reg[exprNode->place-18], float_reg[left_reg-18], float_reg[right_reg-18]);
+                    break;
+                case BINARY_OP_SUB:
+                    fprintf(output, "\tfsub.s %s, %s, %s\n", float_reg[exprNode->place-18], float_reg[left_reg-18], float_reg[right_reg-18]);
+                    break;
+                case BINARY_OP_MUL:
+                    fprintf(output, "\tfmul.s %s, %s, %s\n", float_reg[exprNode->place-18], float_reg[left_reg-18], float_reg[right_reg-18]);
+                    break;
+                case BINARY_OP_DIV:
+                    fprintf(output, "\tfdiv.s %s, %s, %s\n", float_reg[exprNode->place-18], float_reg[left_reg-18], float_reg[right_reg-18]);
+                    break;
+            }
+        }
+    }
+    else{
+        int zero_float_reg = get_reg(1);
+        free_reg(1);        //free left_reg
+        
+        if( isRelOp(exprNode->semantic_value.exprSemanticValue) ){
+            exprNode->place = get_reg(0);
+            switch( exprNode->semantic_value.exprSemanticValue.op.unaryOp ){
+                case UNARY_OP_LOGICAL_NEGATION:
+                    fprintf(output, "\tfcvt.s.w %s, x0\n", float_reg[zero_float_reg-18]);
+                    fprintf(output, "\tfeq.s %s, %s, %s\n", int_reg[exprNode->place], float_reg[left_reg-18], float_reg[zero_float_reg-18]);
+                    //fprintf(output, "\tseqz %s, %s\n", int_reg[exprNode->place], int_reg[left_reg]);
+                    break;
+            }
+        }
+        else{
+            exprNode->place = get_reg(1);
+            switch( exprNode->semantic_value.exprSemanticValue.op.unaryOp ){
+                case UNARY_OP_NEGATIVE:
+                    fprintf(output, "\tfcvt.s.w %s, x0\n", float_reg[zero_float_reg-18]);
+                    fprintf(output, "\tfsub.s %s, %s, %s\n", float_reg[(exprNode->place)-18], float_reg[zero_float_reg-18], float_reg[(exprNode->place)-18]);
+                    break;
+                case UNARY_OP_POSITIVE:
+                    fprintf(output, "\tfcvt.s.w %s, x0\n", float_reg[zero_float_reg-18]);
+                    fprintf(output, "\tadd.s %s, %s, %s\n", float_reg[(exprNode->place)-18], float_reg[zero_float_reg-18], float_reg[(exprNode->place)-18]);
+                    break;
+                default:
+                    break;
+            }
+        }
+        free_reg(1);        //free zero_reg
+    }
+}
+
 void gen_expr(AST_NODE *exprNode, int *ARoffset)
 {
     int reg;
@@ -57,11 +219,10 @@ void gen_expr(AST_NODE *exprNode, int *ARoffset)
         case CONST_VALUE_NODE:
             if( exprNode->dataType == INT_TYPE ){
                 reg = get_reg(0);
-                fprintf(output, "\taddi %s, x0, %d\n", int_reg[reg], exprNode->semantic_value.const1->const_u.intval);
+                fprintf(output, "\tli %s, %d\n", int_reg[reg], exprNode->semantic_value.const1->const_u.intval);
             }
             else{
                 reg = get_reg(1);
-                // fprintf(output, "\tli %s, %u\n", float_reg[reg-18], get_float_bit(exprNode->semantic_value.const1->const_u.fval));
                 fprintf(output, "\t.data\n");
                 fprintf(output, "\t_CONSTANT_%d: .word %u\n", cur_const, get_float_bit(exprNode->semantic_value.const1->const_u.fval));
                 fprintf(output, "\t.align 3\n");
@@ -104,44 +265,34 @@ void gen_expr(AST_NODE *exprNode, int *ARoffset)
             if( exprNode->semantic_value.exprSemanticValue.kind == BINARY_OPERATION ){
                 gen_expr(exprNode->child, ARoffset);
                 gen_expr(exprNode->child->rightSibling, ARoffset);
-                if( exprNode->child->place < 18 && exprNode->child->place < 18 ){
-                    free_reg(0);
-                    free_reg(0);
-                    exprNode->place = get_reg(0);
-                    switch (exprNode->semantic_value.exprSemanticValue.op.binaryOp){
-                        case BINARY_OP_ADD:
-                            fprintf(output, "\tadd %s, %s, %s\n", int_reg[exprNode->place], int_reg[exprNode->child->place], int_reg[exprNode->child->rightSibling->place]);
-                            break;
-                        case BINARY_OP_SUB:
-                            fprintf(output, "\tsub %s, %s, %s\n", int_reg[exprNode->place], int_reg[exprNode->child->place], int_reg[exprNode->child->rightSibling->place]);
-                            break;
-                        case BINARY_OP_MUL:
-                            fprintf(output, "\tmul %s, %s, %s\n", int_reg[exprNode->place], int_reg[exprNode->child->place], int_reg[exprNode->child->rightSibling->place]);
-                            break;
-                        case BINARY_OP_DIV:
-                            fprintf(output, "\tdiv %s, %s, %s\n", int_reg[exprNode->place], int_reg[exprNode->child->place], int_reg[exprNode->child->rightSibling->place]);
-                            break;
-                        // case BINARY_OP_AND:
-                        //     fprintf(output, "\tand %s, %s, %s\n", int_reg[exprNode->place], int_reg[exprNode->child->place], int_reg[exprNode->child->rightSibling->place]);
-                        //     break;
-                        // case BINARY_OP_OR:
-                        //     fprintf(output, "\tor %s, %s, %s\n", int_reg[exprNode->place], int_reg[exprNode->child->place], int_reg[exprNode->child->rightSibling->place]);
-                        //     break;
-                        // case BINARY_OP_EQ:
-                        //     fprintf(output, "\t %s, %s, %s\n", int_reg[exprNode->place], int_reg[exprNode->child->place], int_reg[exprNode->child->rightSibling->place]);
-                        //     break;
-                        // case BINARY_OP_ADD:
-                        //     fprintf(output, "\tadd %s, %s, %s\n", int_reg[exprNode->place], int_reg[exprNode->child->place], int_reg[exprNode->child->rightSibling->place]);
-                        //     break;
-
-                    }
+                if( exprNode->child->place < 18 && exprNode->child->rightSibling->place < 18 ){
+                    gen_int_expr(exprNode->child->place, exprNode->child->rightSibling->place, exprNode);
                 }
                 else{
-
+                    int convert_reg;
+                    if( exprNode->child->place < 18 ){
+                        convert_reg = get_reg(1);
+                        fprintf(output, "\tfcvt.s.w %s, %s\n", float_reg[convert_reg-18], int_reg[exprNode->child->place]);
+                        free_reg(0);
+                        exprNode->child->place = convert_reg;
+                    }
+                    else if( exprNode->child->rightSibling->place < 18 ){
+                        convert_reg = get_reg(1);
+                        fprintf(output, "\tfcvt.s.w %s, %s\n", float_reg[convert_reg-18], int_reg[exprNode->child->rightSibling->place]);
+                        free_reg(0);
+                        exprNode->child->rightSibling->place = convert_reg;   
+                    }
+                    gen_float_expr(exprNode->child->place, exprNode->child->rightSibling->place, exprNode);
                 }
             }
             else{
                 gen_expr(exprNode->child, ARoffset);
+                if( exprNode->child->place < 18 ){
+                    gen_int_expr(exprNode->child->place, -1, exprNode);
+                }
+                else{
+                    gen_float_expr(exprNode->child->place, -1, exprNode);
+                }
             }
             break;
         case STMT_NODE:
@@ -243,6 +394,7 @@ void gen_fread_call(AST_NODE *freadfunc)
     return;
 }
 
+
 void gen_function_call(AST_NODE *stmtNode, int *ARoffset)
 {
     if( strcmp(stmtNode->child->semantic_value.identifierSemanticValue.identifierName, "write") == 0 ){
@@ -255,7 +407,7 @@ void gen_function_call(AST_NODE *stmtNode, int *ARoffset)
         gen_fread_call(stmtNode);
     }
     else{
-        
+        fprintf(output, )
     }
 }
 
@@ -344,7 +496,7 @@ void gen_block(AST_NODE *blockNode, int *ARoffset)
     if( blockNode->child->nodeType == STMT_LIST_NODE ){
         stmtListNode = blockNode->child;
     }
-    else if( blockNode->child->rightSibling->nodeType == STMT_LIST_NODE ){
+    else if( blockNode->child->rightSibling != NULL && blockNode->child->rightSibling->nodeType == STMT_LIST_NODE ){
         stmtListNode = blockNode->child->rightSibling;
     }
     else{
@@ -355,7 +507,7 @@ void gen_block(AST_NODE *blockNode, int *ARoffset)
         if( stmtNode->nodeType == BLOCK_NODE ){
             gen_block(stmtNode, ARoffset);
         }
-        else{
+        else if (stmtNode->nodeType != NUL_NODE){
             switch(stmtNode->semantic_value.stmtSemanticValue.kind){
                 case WHILE_STMT:
                     gen_while(stmtNode, ARoffset);

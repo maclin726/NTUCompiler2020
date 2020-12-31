@@ -192,29 +192,26 @@ int processConstExprNode(AST_NODE* constExprNode)   //return whether the express
         if( isBinaryOp ) {
             rVal = constExprNode->child->rightSibling->semantic_value.const1->const_u.intval;
             switch (constExprNode->semantic_value.exprSemanticValue.op.binaryOp){
-                case BINARY_OP_ADD:
-                    curNodeConst = lVal + rVal;
-                    break;
-                case BINARY_OP_SUB:
-                    curNodeConst = lVal - rVal;
-                    break;
-                case BINARY_OP_MUL:
-                    curNodeConst = lVal * rVal;
-                    break;
-                case BINARY_OP_DIV:
-                    curNodeConst = lVal / rVal;
-                    break;
-                default:
-                    break;
+                case BINARY_OP_ADD: curNodeConst = lVal + rVal;       break;
+                case BINARY_OP_SUB: curNodeConst = lVal - rVal;       break;
+                case BINARY_OP_MUL: curNodeConst = lVal * rVal;       break;
+                case BINARY_OP_DIV: curNodeConst = lVal / rVal;       break;
+                case BINARY_OP_EQ:  curNodeConst = (lVal == rVal);    break;
+                case BINARY_OP_GE:  curNodeConst = (lVal >= rVal);    break;
+                case BINARY_OP_GT:  curNodeConst = (lVal > rVal);     break;
+                case BINARY_OP_LE:  curNodeConst = (lVal <= rVal);    break;
+                case BINARY_OP_LT:  curNodeConst = (lVal < rVal);     break;
+                case BINARY_OP_OR:  curNodeConst = (lVal || rVal);    break;
+                case BINARY_OP_AND: curNodeConst = (lVal && rVal);    break;
+                default:                                              break;
             }
         }
         else {
             switch (constExprNode->semantic_value.exprSemanticValue.op.unaryOp){
-                case UNARY_OP_NEGATIVE:
-                    curNodeConst = -lVal;
-                    break;
-                default:
-                    break;
+                case UNARY_OP_NEGATIVE: curNodeConst = -lVal;                   break;
+                case UNARY_OP_LOGICAL_NEGATION: curNodeConst = (!lVal);         break;
+                case UNARY_OP_POSITIVE: curNodeConst = (lVal);                  break;
+                default:                                                        break;
             }
         }
         makeItConstNode(constExprNode, curNodeConst, 0, 0);
@@ -244,6 +241,33 @@ void makeItConstNode(AST_NODE* constExprNode, int inum, float fnum, int isInt)
     return;
 }
 
+float floatArithmeticCalc(float lVal, float rVal, BINARY_OPERATOR op)
+{
+    switch(op){
+        case BINARY_OP_ADD: return lVal + rVal;
+        case BINARY_OP_SUB: return lVal - rVal;
+        case BINARY_OP_MUL: return lVal * rVal;
+        case BINARY_OP_DIV: return lVal / rVal;
+        default: break;
+    }
+    return 0;
+}
+
+int floatLogicalRelationCalc(float lVal, float rVal, BINARY_OPERATOR op)
+{
+    switch(op){
+        case BINARY_OP_EQ:  return (lVal == rVal);
+        case BINARY_OP_GE:  return (lVal >= rVal);
+        case BINARY_OP_GT:  return (lVal > rVal); 
+        case BINARY_OP_LE:  return (lVal <= rVal);
+        case BINARY_OP_LT:  return (lVal < rVal); 
+        case BINARY_OP_OR:  return (lVal || rVal);
+        case BINARY_OP_AND: return (lVal && rVal);
+        default: break;
+    }
+    return 0;
+}
+
 //return 0 if not const, 1 if const int, 2 if const float
 int processGlobalInitValue(AST_NODE *exprNode){
     if( exprNode->nodeType == CONST_VALUE_NODE ){
@@ -270,72 +294,74 @@ int processGlobalInitValue(AST_NODE *exprNode){
         if( leftIsConst == 1 && rightIsConst == 1 ){
             int lVal, rVal, curNodeConst;
             lVal = exprNode->child->semantic_value.const1->const_u.intval;
-            if( isBinaryOp ) {
+            if( isBinaryOp ) {      // int + int
                 rVal = exprNode->child->rightSibling->semantic_value.const1->const_u.intval;
                 switch (exprNode->semantic_value.exprSemanticValue.op.binaryOp){
-                    case BINARY_OP_ADD:
-                        curNodeConst = lVal + rVal;
-                        break;
-                    case BINARY_OP_SUB:
-                        curNodeConst = lVal - rVal;
-                        break;
-                    case BINARY_OP_MUL:
-                        curNodeConst = lVal * rVal;
-                        break;
-                    case BINARY_OP_DIV:
-                        curNodeConst = lVal / rVal;
-                        break;
-                    default:
-                        break;
+                    case BINARY_OP_ADD: curNodeConst = lVal + rVal;       break;
+                    case BINARY_OP_SUB: curNodeConst = lVal - rVal;       break;
+                    case BINARY_OP_MUL: curNodeConst = lVal * rVal;       break;
+                    case BINARY_OP_DIV: curNodeConst = lVal / rVal;       break;
+                    case BINARY_OP_EQ:  curNodeConst = (lVal == rVal);    break;
+                    case BINARY_OP_GE:  curNodeConst = (lVal >= rVal);    break;
+                    case BINARY_OP_GT:  curNodeConst = (lVal > rVal);     break;
+                    case BINARY_OP_LE:  curNodeConst = (lVal <= rVal);    break;
+                    case BINARY_OP_LT:  curNodeConst = (lVal < rVal);     break;
+                    case BINARY_OP_OR:  curNodeConst = (lVal || rVal);    break;
+                    case BINARY_OP_AND: curNodeConst = (lVal && rVal);    break;
+                    default:                                              break;
                 }
             }
-            else {
+            else {                  // !(int)
                 switch (exprNode->semantic_value.exprSemanticValue.op.unaryOp){
-                    case UNARY_OP_NEGATIVE:
-                        curNodeConst = -lVal;
-                        break;
-                    default:
-                        break;
+                    case UNARY_OP_NEGATIVE: curNodeConst = -lVal;                   break;
+                    case UNARY_OP_LOGICAL_NEGATION: curNodeConst = (!lVal);         break;
+                    case UNARY_OP_POSITIVE: curNodeConst = (lVal);                  break;
+                    default:                                                        break;
                 }
             }
             makeItConstNode(exprNode, curNodeConst, 0, 1);
             return 1;
         }
-        else{
-            float lVal, rVal, curNodeConst;
+        else{       //at least one is float
+            float lVal, rVal, curNodeConstf;
+            int curNodeConsti;
             lVal = leftIsConst == 1 ? exprNode->child->semantic_value.const1->const_u.intval:
                                       exprNode->child->semantic_value.const1->const_u.fval;
             if( isBinaryOp ) {
                 rVal = rightIsConst == 1 ? exprNode->child->rightSibling->semantic_value.const1->const_u.intval:
                                             exprNode->child->rightSibling->semantic_value.const1->const_u.fval;
                 switch (exprNode->semantic_value.exprSemanticValue.op.binaryOp){
-                    case BINARY_OP_ADD:
-                        curNodeConst = lVal + rVal;
-                        break;
-                    case BINARY_OP_SUB:
-                        curNodeConst = lVal - rVal;
-                        break;
-                    case BINARY_OP_MUL:
-                        curNodeConst = lVal * rVal;
-                        break;
-                    case BINARY_OP_DIV:
-                        curNodeConst = lVal / rVal;
-                        break;
+                    case BINARY_OP_ADD: case BINARY_OP_SUB: case BINARY_OP_MUL: case BINARY_OP_DIV:
+                        curNodeConstf = floatArithmeticCalc(lVal, rVal, exprNode->semantic_value.exprSemanticValue.op.binaryOp);
+                        makeItConstNode(exprNode, 0, curNodeConstf, 0);
+                        return 2;
                     default:
-                        break;
+                        curNodeConsti = floatLogicalRelationCalc(lVal, rVal, exprNode->semantic_value.exprSemanticValue.op.binaryOp);
+                        makeItConstNode(exprNode, curNodeConsti, 0, 1);
+                        return 1;
                 }
             }
             else {
                 switch (exprNode->semantic_value.exprSemanticValue.op.unaryOp){
                     case UNARY_OP_NEGATIVE:
-                        curNodeConst = -lVal;
+                        curNodeConstf = -lVal;
+                        makeItConstNode(exprNode, 0, curNodeConstf, 0);
+                        return 2;
+                        break;
+                    case UNARY_OP_POSITIVE:
+                        curNodeConstf = lVal;
+                        makeItConstNode(exprNode, 0, curNodeConstf, 0);
+                        return 2;
+                        break;
+                    case UNARY_OP_LOGICAL_NEGATION:
+                        curNodeConsti = !lVal;
+                        makeItConstNode(exprNode, curNodeConsti, 0, 1);
+                        return 1;
                         break;
                     default:
                         break;
                 }
             }
-            makeItConstNode(exprNode, 0, curNodeConst, 0);
-            return 2;
         }
     }
     return 0;
@@ -464,7 +490,7 @@ void processStmtNode(AST_NODE* stmtNode)
         processBlockNode(stmtNode);
         closeScope();
     }
-    else{
+    else if(stmtNode->nodeType != NUL_NODE){
         switch(stmtNode->semantic_value.stmtSemanticValue.kind){
             case WHILE_STMT:
                 processWhileStmt(stmtNode);
