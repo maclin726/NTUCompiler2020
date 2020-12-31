@@ -599,12 +599,8 @@ void processAssignmentStmt(AST_NODE* assignmentNode)
 void processIfStmt(AST_NODE* ifNode)
 {
     processAssignmentStmt(ifNode->child);                            //assignment(condition)
-    openScope();
-    processBlockNode(ifNode->child->rightSibling);                 //"then" block
-    closeScope();
-    openScope();
-    processBlockNode(ifNode->child->rightSibling->rightSibling);   //"else" block
-    closeScope();
+    processStmtNode(ifNode->child->rightSibling);                 //"then" block
+    processStmtNode(ifNode->child->rightSibling->rightSibling);   //"else" block
     return;
 }
 
@@ -643,7 +639,7 @@ void processFunctionCall(AST_NODE* functionCallNode)
 {
     if( strcmp("write", functionCallNode->child->semantic_value.identifierSemanticValue.identifierName) == 0 ){
         processWriteFunction(functionCallNode);
-        functionCallNode->dataType = INT_TYPE;
+        functionCallNode->dataType = VOID_TYPE;
     }
     else if( strcmp("read", functionCallNode->child->semantic_value.identifierSemanticValue.identifierName) == 0 ){
         processReadFunction(functionCallNode);

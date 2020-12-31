@@ -120,7 +120,7 @@ void initializeSymbolTable()
     attribute->attributeKind = FUNCTION_SIGNATURE;
     attribute->attr.functionSignature->parametersCount = 1;
     attribute->attr.functionSignature->parameterList = NULL;
-    attribute->attr.functionSignature->returnType = INT_TYPE;
+    attribute->attr.functionSignature->returnType = VOID_TYPE;
     enterSymbol(SYMBOL_TABLE_SYS_LIB_WRITE, attribute);
 
     return;

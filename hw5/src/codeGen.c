@@ -8,6 +8,7 @@ void gen_block(AST_NODE *blockNode, int *ARoffset, char *funcName);
 void gen_localVar(AST_NODE *blockNode, int *ARoffset);
 int isRelOp(EXPRSemanticValue exprSemanticValue);
 void gen_expr(AST_NODE *exprNode, int *ARoffset);
+void gen_stmt(AST_NODE *stmtNode, int *ARoffset, char *funcName);
 
 FILE *output;
 
@@ -397,10 +398,10 @@ void gen_if(AST_NODE *stmtNode, int *ARoffset, char *funcName)
         free_reg(0);
         free_reg(1);
     }
-    gen_block(stmtNode->child->rightSibling, ARoffset, funcName);
+    gen_stmt(stmtNode->child->rightSibling, ARoffset, funcName);
     fprintf(output, "\tj IF_exit%d\n", cur_if);
     fprintf(output, "IF_else%d:\n", cur_if);
-    gen_block(stmtNode->child->rightSibling->rightSibling, ARoffset, funcName);
+    gen_stmt(stmtNode->child->rightSibling->rightSibling, ARoffset, funcName);
     fprintf(output, "IF_exit%d:\n", cur_if);
     return;
 }
@@ -614,6 +615,40 @@ void gen_return(AST_NODE *returnNode, int *ARoffset, char *funcName)
     return;
 }
 
+void gen_stmt(AST_NODE *stmtNode, int *ARoffset, char *funcName)
+{
+    if( stmtNode->nodeType == BLOCK_NODE ){
+        gen_block(stmtNode, ARoffset, funcName);
+    }
+    else if (stmtNode->nodeType != NUL_NODE){
+        switch(stmtNode->semantic_value.stmtSemanticValue.kind){
+            case WHILE_STMT:
+                gen_while(stmtNode, ARoffset, funcName);
+                break;
+            case FOR_STMT:
+                gen_for(stmtNode, ARoffset, funcName);
+                break;
+            case IF_STMT:
+                gen_if(stmtNode, ARoffset, funcName);
+                break;
+            case FUNCTION_CALL_STMT:
+                gen_function_call(stmtNode, ARoffset);
+                if( stmtNode->dataType == INT_TYPE )
+                    free_reg(0);
+                else if( stmtNode->dataType == FLOAT_TYPE )
+                    free_reg(1);
+                break;
+            case ASSIGN_STMT:
+                gen_assign(stmtNode->child,stmtNode->child->rightSibling, ARoffset);
+                break;
+            case RETURN_STMT:
+                gen_return(stmtNode, ARoffset, funcName);
+                break;
+        }
+    }
+    return;
+}
+
 void gen_block(AST_NODE *blockNode, int *ARoffset, char *funcName)
 {
     if( blockNode->child == NULL )
@@ -632,35 +667,36 @@ void gen_block(AST_NODE *blockNode, int *ARoffset, char *funcName)
     }
     AST_NODE *stmtNode = stmtListNode->child;
     while( stmtNode != NULL ){
-        if( stmtNode->nodeType == BLOCK_NODE ){
-            gen_block(stmtNode, ARoffset, funcName);
-        }
-        else if (stmtNode->nodeType != NUL_NODE){
-            switch(stmtNode->semantic_value.stmtSemanticValue.kind){
-                case WHILE_STMT:
-                    gen_while(stmtNode, ARoffset, funcName);
-                    break;
-                case FOR_STMT:
-                    gen_for(stmtNode, ARoffset, funcName);
-                    break;
-                case IF_STMT:
-                    gen_if(stmtNode, ARoffset, funcName);
-                    break;
-                case FUNCTION_CALL_STMT:
-                    gen_function_call(stmtNode, ARoffset);
-                    if( stmtNode->dataType == INT_TYPE )
-                        free_reg(0);
-                    else if( stmtNode->dataType == FLOAT_TYPE )
-                        free_reg(1);
-                    break;
-                case ASSIGN_STMT:
-                    gen_assign(stmtNode->child,stmtNode->child->rightSibling, ARoffset);
-                    break;
-                case RETURN_STMT:
-                    gen_return(stmtNode, ARoffset, funcName);
-                    break;
-            }
-        }
+        gen_stmt(stmtNode, ARoffset, funcName);
+        // if( stmtNode->nodeType == BLOCK_NODE ){
+        //     gen_block(stmtNode, ARoffset, funcName);
+        // }
+        // else if (stmtNode->nodeType != NUL_NODE){
+        //     switch(stmtNode->semantic_value.stmtSemanticValue.kind){
+        //         case WHILE_STMT:
+        //             gen_while(stmtNode, ARoffset, funcName);
+        //             break;
+        //         case FOR_STMT:
+        //             gen_for(stmtNode, ARoffset, funcName);
+        //             break;
+        //         case IF_STMT:
+        //             gen_if(stmtNode, ARoffset, funcName);
+        //             break;
+        //         case FUNCTION_CALL_STMT:
+        //             gen_function_call(stmtNode, ARoffset);
+        //             if( stmtNode->dataType == INT_TYPE )
+        //                 free_reg(0);
+        //             else if( stmtNode->dataType == FLOAT_TYPE )
+        //                 free_reg(1);
+        //             break;
+        //         case ASSIGN_STMT:
+        //             gen_assign(stmtNode->child,stmtNode->child->rightSibling, ARoffset);
+        //             break;
+        //         case RETURN_STMT:
+        //             gen_return(stmtNode, ARoffset, funcName);
+        //             break;
+        //     }
+        // }
         stmtNode = stmtNode->rightSibling;
     }
     return;
