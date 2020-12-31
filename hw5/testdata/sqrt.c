@@ -15,7 +15,7 @@ float SquareRoot() {
 }
 
 int MAIN() {
-  n = 1;
+  n = 1.0;
   while (n <= 10.0) {
     write(SquareRoot());
     write("\n");
