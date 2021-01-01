@@ -18,6 +18,7 @@ const char float_reg[24][4] = {"f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "
 int cur_int_reg = 0, cur_float_reg = 0;
 int cur_const = 0;
 int total_if = 0, total_for = 0, total_while = 0;
+int total_and = 0, total_or = 0;
 
 unsigned int get_float_bit(float f){
     union ufloat{
@@ -95,6 +96,98 @@ int get_global_addr_register(AST_NODE *node, int *ARoffset){
     return target_addr_reg;
 }
 
+void gen_and_expr(AST_NODE *exprNode, int *ARoffset)
+{
+    int cur_and = total_and++;
+    gen_expr(exprNode->child, ARoffset);
+    int left_child_reg = exprNode->child->place;
+    if( left_child_reg < 18 ) {
+        fprintf(output, "\tbeqz %s, AND_false%d\n", int_reg[left_child_reg], cur_and);
+        free_reg(0);    // free left_child_reg
+    }
+    else {
+        int zero_float_reg = get_reg(1);
+        fprintf(output, "\tfcvt.s.w %s, x0\n", float_reg[zero_float_reg-18]);
+        free_reg(1);    // free zero_float_reg
+        free_reg(1);    // free left_child_reg
+        int tmp_reg = get_reg(0);
+        fprintf(output, "\tfeq.s %s, %s, %s\n", int_reg[tmp_reg], float_reg[left_child_reg-18], float_reg[zero_float_reg-18]);
+        fprintf(output, "\tseqz %s, %s\n", int_reg[tmp_reg], int_reg[tmp_reg]);
+        fprintf(output, "\tbeqz %s, AND_false%d\n", int_reg[tmp_reg], cur_and);
+        free_reg(0);    // free tmp_reg
+    }
+
+    gen_expr(exprNode->child->rightSibling, ARoffset);
+    int right_child_reg = exprNode->child->rightSibling->place;
+    if( right_child_reg < 18 ) {
+        fprintf(output, "\tbeqz %s, AND_false%d\n", int_reg[right_child_reg], cur_and);
+        free_reg(0);    // free right_child_reg
+    }
+    else {
+        int zero_float_reg = get_reg(1);
+        fprintf(output, "\tfcvt.s.w %s, x0\n", float_reg[zero_float_reg-18]);
+        free_reg(1);    // free zero_float_reg
+        free_reg(1);    // free right_child_reg
+        int tmp_reg = get_reg(0);
+        fprintf(output, "\tfeq.s %s, %s, %s\n", int_reg[tmp_reg], float_reg[right_child_reg-18], float_reg[zero_float_reg-18]);
+        fprintf(output, "\tseqz %s, %s\n", int_reg[tmp_reg], int_reg[tmp_reg]);
+        fprintf(output, "\tbeqz %s, AND_false%d\n", int_reg[tmp_reg], cur_and);
+        free_reg(0);    // free tmp_reg
+    }
+    exprNode->place = get_reg(0);
+    fprintf(output, "\taddi %s, x0, 1\n", int_reg[exprNode->place]);
+    fprintf(output, "\tj AND_exit%d\n", cur_and);
+    fprintf(output, "\tAND_false%d:\n", cur_and);
+    fprintf(output, "\taddi %s, x0, 0\n", int_reg[exprNode->place]);
+    fprintf(output, "\tAND_exit%d:\n", cur_and);
+    return;
+}
+
+void gen_or_expr(AST_NODE *exprNode, int *ARoffset)
+{
+    int cur_or = total_or++;
+    gen_expr(exprNode->child, ARoffset);
+    int left_child_reg = exprNode->child->place;
+    if( left_child_reg < 18 ) {
+        fprintf(output, "\tbnez %s, OR_true%d\n", int_reg[left_child_reg], cur_or);
+        free_reg(0);    // free left_child_reg
+    }
+    else {
+        int zero_float_reg = get_reg(1);
+        fprintf(output, "\tfcvt.s.w %s, x0\n", float_reg[zero_float_reg-18]);
+        free_reg(1);    // free zero_float_reg
+        free_reg(1);    // free left_child_reg
+        int tmp_reg = get_reg(0);
+        fprintf(output, "\tfeq.s %s, %s, %s\n", int_reg[tmp_reg], float_reg[left_child_reg-18], float_reg[zero_float_reg-18]);
+        fprintf(output, "\tbeqz %s, OR_true%d\n", int_reg[tmp_reg], cur_or);
+        free_reg(0);    // free tmp_reg
+    }
+
+    gen_expr(exprNode->child->rightSibling, ARoffset);
+    int right_child_reg = exprNode->child->rightSibling->place;
+    if( right_child_reg < 18 ) {
+        fprintf(output, "\tbnez %s, OR_true%d\n", int_reg[right_child_reg], cur_or);
+        free_reg(0);    // free right_child_reg
+    }
+    else {
+        int zero_float_reg = get_reg(1);
+        fprintf(output, "\tfcvt.s.w %s, x0\n", float_reg[zero_float_reg-18]);
+        free_reg(1);    // free zero_float_reg
+        free_reg(1);    // free right_child_reg
+        int tmp_reg = get_reg(0);
+        fprintf(output, "\tfeq.s %s, %s, %s\n", int_reg[tmp_reg], float_reg[right_child_reg-18], float_reg[zero_float_reg-18]);
+        fprintf(output, "\tbeqz %s, OR_true%d\n", int_reg[tmp_reg], cur_or);
+        free_reg(0);    // free tmp_reg
+    }
+    exprNode->place = get_reg(0);
+    fprintf(output, "\taddi %s, x0, 0\n", int_reg[exprNode->place]);
+    fprintf(output, "\tj OR_exit%d\n", cur_or);
+    fprintf(output, "\tOR_true%d:\n", cur_or);
+    fprintf(output, "\taddi %s, x0, 1\n", int_reg[exprNode->place]);
+    fprintf(output, "\tOR_exit%d:\n", cur_or);
+    return;
+}
+
 int gen_int_expr(int left_reg, int right_reg, AST_NODE *exprNode)
 {
     //left_reg and right_reg are two int register, generate the code and return the int_reg index that containing the result
@@ -116,10 +209,10 @@ int gen_int_expr(int left_reg, int right_reg, AST_NODE *exprNode)
                 fprintf(output, "\tdiv %s, %s, %s\n", int_reg[exprNode->place], int_reg[left_reg], int_reg[right_reg]);
                 break;
             case BINARY_OP_AND:
-                //TODO
+                // nothing
                 break;
             case BINARY_OP_OR:
-                //TODO
+                // nothing
                 break;
             case BINARY_OP_EQ:
                 fprintf(output, "\tsub %s, %s, %s\n", int_reg[exprNode->place], int_reg[left_reg], int_reg[right_reg]);
@@ -177,10 +270,10 @@ int gen_float_expr(int left_reg, int right_reg, AST_NODE *exprNode)
             exprNode->place = get_reg(0);
             switch( exprNode->semantic_value.exprSemanticValue.op.binaryOp ){
                 case BINARY_OP_AND:
-                    //TODO
+                    // nothing
                     break;
                 case BINARY_OP_OR:
-                    //TODO
+                    // nothing
                     break;
                 case BINARY_OP_EQ:
                     fprintf(output, "\tfeq.s %s, %s, %s\n", int_reg[exprNode->place], float_reg[left_reg-18], float_reg[right_reg-18]);
@@ -318,6 +411,14 @@ void gen_expr(AST_NODE *exprNode, int *ARoffset)
             break;
         case EXPR_NODE:
             if( exprNode->semantic_value.exprSemanticValue.kind == BINARY_OPERATION ){
+                if(exprNode->semantic_value.exprSemanticValue.op.binaryOp == BINARY_OP_AND) {
+                    gen_and_expr(exprNode, ARoffset);
+                    break;
+                }
+                else if(exprNode->semantic_value.exprSemanticValue.op.binaryOp == BINARY_OP_OR) {
+                    gen_or_expr(exprNode, ARoffset);
+                    break;
+                }
                 gen_expr(exprNode->child, ARoffset);
                 gen_expr(exprNode->child->rightSibling, ARoffset);
                 if( exprNode->child->place < 18 && exprNode->child->rightSibling->place < 18 ){

@@ -12,7 +12,7 @@
 #define SYMBOL_TABLE_SYS_LIB_READ "read"
 #define SYMBOL_TABLE_SYS_LIB_FREAD "fread"
 #define SYMBOL_TABLE_SYS_LIB_WRITE "write"
-#define HASH_TABLE_SIZE 256
+#define HASH_TABLE_SIZE 512
 #define MAX_SCOPE_SIZE 256
 
 

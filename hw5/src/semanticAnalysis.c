@@ -551,9 +551,7 @@ void processForStmt(AST_NODE* forNode)      //for = assignment list + relop list
     processAssignmentList(forNode->child);
     processRelopList(forNode->child->rightSibling);
     processAssignmentList(forNode->child->rightSibling->rightSibling);
-    openScope();
-    processBlockNode(forNode->child->rightSibling->rightSibling->rightSibling);
-    closeScope();
+    processStmtNode(forNode->child->rightSibling->rightSibling->rightSibling);
     return;
 }
 
