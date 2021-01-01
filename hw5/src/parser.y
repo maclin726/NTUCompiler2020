@@ -875,7 +875,7 @@ char *argv[];
      
     symbolTableEnd();
     if (!g_anyErrorOccur) {
-        printf("Parsing completed. No errors found.\n");
+        //printf("Parsing completed. No errors found.\n");
         gen_code(prog);
     }
 

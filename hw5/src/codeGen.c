@@ -336,11 +336,6 @@ int gen_float_expr(int left_reg, int right_reg, AST_NODE *exprNode)
                     free_reg(1);    // free left_reg
                     exprNode->place = get_reg(1);
                     fprintf(output, "\tfneg.s %s, %s\n", float_reg[(exprNode->place)-18], float_reg[left_reg-18]);
-                    // fprintf(output, "\tfcvt.s.w %s, x0\n", float_reg[zero_float_reg-18]);
-                    // free_reg(1);    // free zero_reg
-                    // free_reg(1);    // free left_reg
-                    // exprNode->place = get_reg(1);
-                    // fprintf(output, "\tfsub.s %s, %s, %s\n", float_reg[(exprNode->place)-18], float_reg[zero_float_reg-18], float_reg[left_reg-18]);
                     break;
                 case UNARY_OP_POSITIVE:
                     fprintf(output, "\tfcvt.s.w %s, x0\n", float_reg[zero_float_reg-18]);
