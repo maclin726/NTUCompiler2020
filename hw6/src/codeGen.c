@@ -494,7 +494,44 @@ void gen_while(AST_NODE *stmtNode, int *ARoffset, char *funcName)
 
 void gen_for(AST_NODE *stmtNode, int *ARoffset, char *funcName)
 {
+    int cur_for = total_for++;
+    AST_NODE *init_expr_node = stmtNode->child->child;
+    while( init_expr_node != NULL ){
+        gen_expr(init_expr_node, ARoffset);
+        init_expr_node = init_expr_node->rightSibling;
+    }
 
+    fprintf(output, "FOR_test%d:\n", cur_for);
+    if( stmtNode->child->rightSibling->child != NULL ){
+        AST_NODE *cond_expr_node = stmtNode->child->rightSibling->child;
+        while( cond_expr_node != NULL ){
+            gen_expr(cond_expr_node, ARoffset);
+            if( cond_expr_node->rightSibling == NULL ){
+                if (cond_expr_node->dataType == INT_TYPE){
+                    fprintf(output, "\tbeqz  %s, FOR_exit%d\n", int_reg[cond_expr_node->place], cur_for);
+                    free_reg(0);
+                }
+                else{
+                    int reg_conv = get_reg(0);
+                    fprintf(output, "\tfcvt.w.s %s, %s\n", int_reg[reg_conv], float_reg[cond_expr_node->place - 18]);
+                    fprintf(output, "\tbeqz %s, FOR_exit%d\n", int_reg[reg_conv], cur_for);
+                    free_reg(0);
+                    free_reg(1);
+                }
+            }
+            cond_expr_node = cond_expr_node->rightSibling;
+        }   
+    }    
+    
+    gen_stmt(stmtNode->child->rightSibling->rightSibling->rightSibling, ARoffset, funcName);
+    
+    AST_NODE *inc_expr_node = stmtNode->child->rightSibling->rightSibling->child;
+    while( inc_expr_node != NULL ){
+        gen_expr(inc_expr_node, ARoffset);
+        inc_expr_node = inc_expr_node->rightSibling;
+    }
+    fprintf(output, "\tj FOR_test%d\n", cur_for);
+    fprintf(output, "FOR_exit%d:\n", cur_for);
 }
 
 void gen_if(AST_NODE *stmtNode, int *ARoffset, char *funcName)
