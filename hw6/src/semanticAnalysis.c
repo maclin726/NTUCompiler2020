@@ -660,6 +660,7 @@ void processFunctionCall(AST_NODE* functionCallNode)
                                     functionCallNode->child->rightSibling);
             functionCallNode->dataType = funcEntry->attribute->attr.functionSignature->returnType;
         }
+        functionCallNode->semantic_value.identifierSemanticValue.symbolTableEntry = funcEntry;
     }
     return;
 }
@@ -787,6 +788,7 @@ void processParameterPassing(Parameter* formalParameter, AST_NODE* actualParamet
                 break;
             case IDENTIFIER_NODE:       //e.g. func(a), might pass an array or a scalar
                 checkParamNodeType(curFormal->type, curActual, 1);
+                curActual->semantic_value.identifierSemanticValue.symbolTableEntry = retrieveSymbol(curActual->semantic_value.identifierSemanticValue.identifierName);
                 break;
             case STMT_NODE:             //e.g. func(func(1))
                 processFunctionCall(curActual);

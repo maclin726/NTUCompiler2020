@@ -416,12 +416,12 @@ void gen_expr(AST_NODE *exprNode, int *ARoffset)
             entry = exprNode->semantic_value.identifierSemanticValue.symbolTableEntry;
             if( exprNode->dataType == INT_TYPE ){
                 reg = get_reg(0);
-                if( entry->nestingLevel == 0 ){
+                if( entry->nestingLevel == 0 ){     //global variable
                     int target_addr_reg = get_global_addr_register(exprNode, ARoffset);
                     fprintf(output, "\tlw %s, 0(%s)\n", int_reg[reg], int_reg[target_addr_reg]);
                     free_reg(0);    //free target_addr_reg
                 }
-                else{
+                else{                               //local variable
                     int target_addr_reg = get_local_addr_register(exprNode, ARoffset);
                     fprintf(output, "\tlw %s, 0(%s)\n", int_reg[reg], int_reg[target_addr_reg]);
                     free_reg(0);    //free target_addr_reg
@@ -648,7 +648,7 @@ void save_registers()
         fprintf(output, "\tfsw  fa%d, %d(sp)\n", i, -i * 8 - 224);
     }
 
-    fprintf(output, "\taddi sp, sp, -280\n");
+    fprintf(output, "\taddi sp, sp, -280\n");   //224 + 56 = 280
     return;
 }
 
@@ -684,7 +684,53 @@ void gen_function_call(AST_NODE *stmtNode, int *ARoffset)
         gen_fread_call(stmtNode);
     }
     else{
+        //push all caller-saved registers
         save_registers();
+
+        //push parameter (parameter appears first takes lower address)
+        int param_space = 0;
+        SymbolTableEntry *function_entry = stmtNode->semantic_value.identifierSemanticValue.symbolTableEntry;
+        Parameter *formal_param = function_entry->attribute->attr.functionSignature->parameterList;
+        AST_NODE *actual_param = stmtNode->child->rightSibling->child;
+
+        while( actual_param != NULL ){
+            if( formal_param->type->kind == SCALAR_TYPE_DESCRIPTOR ){
+                param_space += 4;
+            }
+            else{
+                param_space += 8;
+            }
+            actual_param = actual_param->rightSibling;
+            formal_param = formal_param->next;
+        }
+
+        //move sp for param and ra
+        fprintf(output, "\taddi sp, sp, %d\n", -(8 + param_space));
+
+        //push param
+        int cur_parameter_offset = 0;
+        actual_param = stmtNode->child->rightSibling->child;
+        formal_param = function_entry->attribute->attr.functionSignature->parameterList;
+        while( actual_param != NULL ){
+            if( formal_param->type->kind == SCALAR_TYPE_DESCRIPTOR ){
+                gen_expr(actual_param, ARoffset);
+
+                if( formal_param->type->properties.dataType == INT_TYPE ){
+                    fprintf(output, "\tsw %s, %d(sp)\n", int_reg[actual_param->place], cur_parameter_offset + 8);
+                }
+                else{
+                    fprintf(output, "\tfsw %s, %d(sp)\n", float_reg[actual_param->place], cur_parameter_offset + 8);
+                }
+                cur_parameter_offset += 4;
+            }
+            else{
+
+            }
+            actual_param = actual_param->rightSibling;
+            formal_param = formal_param->next;
+        }
+
+        //jump to function
         fprintf(output, "\tcall _start_%s\n", stmtNode->child->semantic_value.identifierSemanticValue.identifierName);
         if( stmtNode->dataType == INT_TYPE ){
             stmtNode->place = get_reg(0);
@@ -694,6 +740,8 @@ void gen_function_call(AST_NODE *stmtNode, int *ARoffset)
             stmtNode->place = get_reg(1);
             fprintf(output, "\tfmv.s %s, fa0\n", float_reg[(stmtNode->place)-18]);
         }
+        //restore sp after calling function
+        fprintf(output, "\taddi sp, sp, %d\n", (8 + param_space) );
         load_registers(stmtNode->place);
     }
 }
@@ -948,6 +996,22 @@ void gen_funcDecl(AST_NODE* funcDeclNode)
     AST_NODE *blockNode = funcDeclNode->child->rightSibling->rightSibling->rightSibling;
     gen_head(functionName);
     gen_prologue(functionName);
+    
+    int offset = -16;
+    AST_NODE *param_node = funcDeclNode->child->rightSibling->rightSibling->child;
+    while( param_node != NULL ){
+        SymbolTableEntry *param_entry = param_node->child->rightSibling->semantic_value.identifierSemanticValue.symbolTableEntry;
+        param_entry->offset = offset;
+
+        if( param_entry->attribute->attributeKind == SCALAR_TYPE_DESCRIPTOR ){
+            offset -= 4;
+        }
+        else{
+            offset -= 8;
+        }
+        param_node = param_node->rightSibling;
+    }
+
     gen_block(blockNode, &ARoffset, functionName);
     gen_epilogue(functionName, ARoffset + 136);
     return;
