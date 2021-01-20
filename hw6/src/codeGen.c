@@ -63,14 +63,31 @@ int get_local_addr_register(AST_NODE *node, int *ARoffset)
         fprintf(output, "\tadd %s, fp, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg]);
     }
     else{
-        gen_expr(node->child, ARoffset);
-        fprintf(output, "\tli %s, 4\n", int_reg[target_addr_reg]);
-        fprintf(output, "\tmul %s, %s, %s\n", int_reg[target_addr_reg], int_reg[node->child->place], int_reg[target_addr_reg]);
-        fprintf(output, "\tli %s, %d\n", int_reg[node->child->place], -base_offset);
-        fprintf(output, "\tadd %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[node->child->place]);
+        int *size_in_dimension = &(entry->attribute->attr.typeDescriptor->properties.arrayProperties.sizeInEachDimension[1]);
+        int size_in_dimesnion_reg = get_reg(0);
+        AST_NODE *dim_node = node->child;
+
+        gen_expr(dim_node, ARoffset);
+        fprintf(output, "\tmv %s, %s\n", int_reg[target_addr_reg], int_reg[dim_node->place]);
+        free_reg(0);        //free dim_node->place
+
+        dim_node = dim_node->rightSibling;
+        while( dim_node != NULL ){
+            fprintf(output, "\tli %s, %d\n", int_reg[size_in_dimesnion_reg], *size_in_dimension);
+            size_in_dimension++;
+            fprintf(output, "\tmul %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[size_in_dimesnion_reg]);
+            gen_expr(dim_node, ARoffset);
+            fprintf(output, "\tadd %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[dim_node->place]);
+            free_reg(0);    //free dim_node->place
+            dim_node = dim_node->rightSibling;
+        }
+        fprintf(output, "\tslli %s, %s, 2\n", int_reg[target_addr_reg], int_reg[target_addr_reg]);
+        
+        fprintf(output, "\tli %s, %d\n", int_reg[size_in_dimesnion_reg], -base_offset);
+        fprintf(output, "\tadd %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[size_in_dimesnion_reg]);
         
         fprintf(output, "\tadd %s, fp, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg]);
-        free_reg(0);    //free node->child->place
+        free_reg(0);        //free size_in_dimension_reg
     }
     return target_addr_reg;
 }
@@ -87,12 +104,28 @@ int get_global_addr_register(AST_NODE *node, int *ARoffset){
         free_reg(0);    //free base_addr_reg
     }
     else{
-        gen_expr(node->child, ARoffset);
-        fprintf(output, "\tli %s, 4\n", int_reg[target_addr_reg]);
-        fprintf(output, "\tmul %s, %s, %s\n", int_reg[target_addr_reg], int_reg[node->child->place], int_reg[target_addr_reg]);
+        int *size_in_dimension = &(entry->attribute->attr.typeDescriptor->properties.arrayProperties.sizeInEachDimension[1]);
+        int size_in_dimesnion_reg = get_reg(0);
+        AST_NODE *dim_node = node->child;
+
+        gen_expr(dim_node, ARoffset);
+        fprintf(output, "\tmv %s, %s\n", int_reg[target_addr_reg], int_reg[dim_node->place]);
+        free_reg(0); //free dim_node->place
+
+        dim_node = dim_node->rightSibling;
+        while (dim_node != NULL){
+            fprintf(output, "\tli %s, %d\n", int_reg[size_in_dimesnion_reg], *size_in_dimension);
+            size_in_dimension++;
+            fprintf(output, "\tmul %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[size_in_dimesnion_reg]);
+            gen_expr(dim_node, ARoffset);
+            fprintf(output, "\tadd %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[dim_node->place]);
+            free_reg(0); //free dim_node->place
+            dim_node = dim_node->rightSibling;
+        }
+        fprintf(output, "\tslli %s, %s, 2\n", int_reg[target_addr_reg], int_reg[target_addr_reg]);
         fprintf(output, "\tadd %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[base_addr_reg]);
-        free_reg(0);    //free node->child->place
-        free_reg(0);    //free base_addr_reg
+        free_reg(0); //free size_in_dimension_reg
+        free_reg(0); //free base_addr_reg
     }
     return target_addr_reg;
 }
