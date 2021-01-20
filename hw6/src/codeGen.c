@@ -9,8 +9,9 @@ void gen_localVar(AST_NODE *blockNode, int *ARoffset);
 int isRelOp(EXPRSemanticValue exprSemanticValue);
 void gen_expr(AST_NODE *exprNode, int *ARoffset);
 void gen_stmt(AST_NODE *stmtNode, int *ARoffset, char *funcName);
+void gen_assign(AST_NODE *left, AST_NODE *right, int *ARoffset);
 
-FILE *output;
+    FILE *output;
 
 const char int_reg[18][4] = {"x5", "x6", "x7", "x9", "x18", "x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27", "x28", "x29", "x30", "x31"};
 const char float_reg[24][4] = {"f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f18", "f19", "f20", "f21", "f22", "f23", "f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31"};
@@ -451,7 +452,20 @@ void gen_expr(AST_NODE *exprNode, int *ARoffset)
             }
             break;
         case STMT_NODE:
-            gen_function_call(exprNode, ARoffset);
+            if( exprNode->semantic_value.exprSemanticValue.kind == ASSIGN_STMT ){
+                gen_assign(exprNode->child, exprNode->child->rightSibling, ARoffset);
+                if( exprNode->child->dataType == INT_TYPE ){
+                    exprNode->place = get_reg(0);
+                    fprintf(output, "\tmv %s, %s\n", int_reg[exprNode->place], int_reg[exprNode->child->place]);
+                }
+                else{
+                    exprNode->place = get_reg(1);
+                    fprintf(output, "\tfmv.s %s, %s\n", float_reg[exprNode->place-18], float_reg[exprNode->child->place-18]);
+                }
+            }
+            else{
+                gen_function_call(exprNode, ARoffset);
+            }
             break;
     }
 }
@@ -624,6 +638,7 @@ void gen_assign(AST_NODE *left, AST_NODE *right, int *ARoffset)
         if( left->dataType == INT_TYPE ){
             if( right->place < 18 ){                //e.g. int a = 1;
                 fprintf(output, "\tsw %s, 0(%s)\n", int_reg[right->place], int_reg[left_addr_reg]);
+                left->place = right->place;
                 free_reg(0);    //free left_addr_reg
                 free_reg(0);    //free right expr
             }
@@ -631,6 +646,7 @@ void gen_assign(AST_NODE *left, AST_NODE *right, int *ARoffset)
                 int reg_convert = get_reg(0);
                 fprintf(output, "\tfcvt.w.s %s, %s, rtz\n", int_reg[reg_convert], float_reg[(right->place)-18]);
                 fprintf(output, "\tsw %s, 0(%s)\n", int_reg[reg_convert], int_reg[left_addr_reg]);
+                left->place = reg_convert;
                 free_reg(0);    //free convert
                 free_reg(0);    //free left_addr_reg
                 free_reg(1);    //free right expr
@@ -641,12 +657,14 @@ void gen_assign(AST_NODE *left, AST_NODE *right, int *ARoffset)
                 int reg_convert = get_reg(1);
                 fprintf(output, "\tfcvt.s.w %s, %s\n", float_reg[reg_convert-18], int_reg[right->place]);
                 fprintf(output, "\tfsw %s, 0(%s)\n", float_reg[reg_convert-18], int_reg[left_addr_reg]);
+                left->place = reg_convert;
                 free_reg(1);    //free convert
                 free_reg(0);    //free left addr
                 free_reg(0);    //free right expr
             }
             else{                                   //e.g. float a = 1.0;
                 fprintf(output, "\tfsw %s, 0(%s)\n", float_reg[(right->place)-18], int_reg[left_addr_reg]);
+                left->place = right->place;
                 free_reg(0);    //free left addr
                 free_reg(1);    //free right expr
             }
@@ -657,6 +675,7 @@ void gen_assign(AST_NODE *left, AST_NODE *right, int *ARoffset)
         if( left->dataType == INT_TYPE ){
             if( right->place < 18 ){                //e.g. int a = 1;
                 fprintf(output, "\tsw %s, 0(%s)\n", int_reg[right->place], int_reg[left_addr_reg]);
+                left->place = right->place;
                 free_reg(0);        //free left addr
                 free_reg(0);        //free right int expr
             }
@@ -664,6 +683,7 @@ void gen_assign(AST_NODE *left, AST_NODE *right, int *ARoffset)
                 int reg_convert = get_reg(0);
                 fprintf(output, "\tfcvt.w.s %s, %s, rtz\n", int_reg[reg_convert], float_reg[(right->place)-18]);
                 fprintf(output, "\tsw %s, 0(%s)\n", int_reg[reg_convert], int_reg[left_addr_reg]);
+                left->place = reg_convert;
                 free_reg(0);        //free right int expr
                 free_reg(0);        //free left addr
                 free_reg(1);        //free right float expr
@@ -674,12 +694,14 @@ void gen_assign(AST_NODE *left, AST_NODE *right, int *ARoffset)
                 int reg_convert = get_reg(1);
                 fprintf(output, "\tfcvt.s.w %s, %s\n", float_reg[reg_convert-18], int_reg[right->place]);
                 fprintf(output, "\tfsw %s, 0(%s)\n", float_reg[reg_convert-18], int_reg[left_addr_reg]);
+                left->place = reg_convert;
                 free_reg(1);        //free right float expr
                 free_reg(0);        //free left addr
                 free_reg(0);        //free right int expr
             }
             else{                                   //e.g. float a = 1.0;
                 fprintf(output, "\tfsw %s, 0(%s)\n", float_reg[(right->place)-18], int_reg[left_addr_reg]);
+                left->place = right->place;
                 free_reg(0);        //free left addr
                 free_reg(1);        //free right float expr
             }
