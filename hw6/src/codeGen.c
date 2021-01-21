@@ -11,7 +11,7 @@ void gen_expr(AST_NODE *exprNode, int *ARoffset);
 void gen_stmt(AST_NODE *stmtNode, int *ARoffset, char *funcName);
 void gen_assign(AST_NODE *left, AST_NODE *right, int *ARoffset);
 
-    FILE *output;
+FILE *output;
 
 const char int_reg[18][4] = {"x5", "x6", "x7", "x9", "x18", "x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27", "x28", "x29", "x30", "x31"};
 const char float_reg[24][4] = {"f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f18", "f19", "f20", "f21", "f22", "f23", "f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31"};
@@ -62,32 +62,50 @@ int get_local_addr_register(AST_NODE *node, int *ARoffset)
         fprintf(output, "\tli %s, %d\n", int_reg[target_addr_reg], -base_offset);
         fprintf(output, "\tadd %s, fp, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg]);
     }
-    else{
-        int *size_in_dimension = &(entry->attribute->attr.typeDescriptor->properties.arrayProperties.sizeInEachDimension[1]);
-        int size_in_dimesnion_reg = get_reg(0);
-        AST_NODE *dim_node = node->child;
+    else{               //ARRAY_TYPE_DESCIPTOR
 
-        gen_expr(dim_node, ARoffset);
-        fprintf(output, "\tmv %s, %s\n", int_reg[target_addr_reg], int_reg[dim_node->place]);
-        free_reg(0);        //free dim_node->place
-
-        dim_node = dim_node->rightSibling;
-        while( dim_node != NULL ){
-            fprintf(output, "\tli %s, %d\n", int_reg[size_in_dimesnion_reg], *size_in_dimension);
-            size_in_dimension++;
-            fprintf(output, "\tmul %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[size_in_dimesnion_reg]);
-            gen_expr(dim_node, ARoffset);
-            fprintf(output, "\tadd %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[dim_node->place]);
-            free_reg(0);    //free dim_node->place
-            dim_node = dim_node->rightSibling;
+        if( base_offset < 0 ){
+            fprintf(output, "\tld %s, %d(fp)\n", int_reg[target_addr_reg], -base_offset);
         }
-        fprintf(output, "\tslli %s, %s, 2\n", int_reg[target_addr_reg], int_reg[target_addr_reg]);
-        
-        fprintf(output, "\tli %s, %d\n", int_reg[size_in_dimesnion_reg], -base_offset);
-        fprintf(output, "\tadd %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[size_in_dimesnion_reg]);
-        
-        fprintf(output, "\tadd %s, fp, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg]);
-        free_reg(0);        //free size_in_dimension_reg
+        else{
+            int base_reg = get_reg(0);
+            fprintf(output, "\tli %s, %d\n", int_reg[base_reg], -base_offset);
+            fprintf(output, "\tadd %s, fp, %s\n", int_reg[target_addr_reg], int_reg[base_reg]);
+            free_reg(0);        //free base_reg
+        }
+
+        SymbolTableEntry *formal_entry = node->semantic_value.identifierSemanticValue.symbolTableEntry;
+        int formal_dim_cnt = formal_entry->attribute->attr.typeDescriptor->properties.arrayProperties.dimension;
+        AST_NODE *ref_dim = node->child;
+        int var_part_reg = get_reg(0);
+
+        if (ref_dim == NULL){           //cases like func(arr)
+            fprintf(output, "\tli %s, 0\n", int_reg[var_part_reg]);
+        }
+        else{
+            gen_expr(ref_dim, ARoffset);
+            fprintf(output, "\tmv %s, %s\n", int_reg[var_part_reg], int_reg[ref_dim->place]);
+            free_reg(0); //free ref_dim->place
+            ref_dim = ref_dim->rightSibling;
+
+            int *formal_dim_size = formal_entry->attribute->attr.typeDescriptor->properties.arrayProperties.sizeInEachDimension;
+            int size_in_dimesnion_reg = get_reg(0);
+            for (int dim = 1; dim < formal_dim_cnt; dim++){
+                fprintf(output, "\tli %s, %d\n", int_reg[size_in_dimesnion_reg], formal_dim_size[dim]);
+                fprintf(output, "\tmul %s, %s, %s\n", int_reg[var_part_reg], int_reg[var_part_reg], int_reg[size_in_dimesnion_reg]);
+                if (ref_dim != NULL){
+                    gen_expr(ref_dim, ARoffset);
+                    fprintf(output, "\tadd %s, %s, %s\n", int_reg[var_part_reg], int_reg[var_part_reg], int_reg[ref_dim->place]);
+                    free_reg(0); //free ref_dim->place
+                    ref_dim = ref_dim->rightSibling;
+                }
+            }
+            free_reg(0); //free size_in_dimension_reg
+        }
+
+        fprintf(output, "\tslli %s, %s, 2\n", int_reg[var_part_reg], int_reg[var_part_reg]);
+        fprintf(output, "\tadd %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[var_part_reg]);
+        free_reg(0); //free var_part_reg
     }
     return target_addr_reg;
 }
@@ -96,36 +114,41 @@ int get_global_addr_register(AST_NODE *node, int *ARoffset){
     SymbolTableEntry *entry = node->semantic_value.identifierSemanticValue.symbolTableEntry;
 
     int target_addr_reg = get_reg(0);
-    int base_addr_reg = get_reg(0);
-    fprintf(output, "\tla %s, _g_%s\n", int_reg[base_addr_reg], node->semantic_value.identifierSemanticValue.identifierName);
+    fprintf(output, "\tla %s, _g_%s\n", int_reg[target_addr_reg], node->semantic_value.identifierSemanticValue.identifierName);
 
-    if( entry->attribute->attr.typeDescriptor->kind == SCALAR_TYPE_DESCRIPTOR ){
-        fprintf(output, "\tmv %s, %s\n", int_reg[target_addr_reg], int_reg[base_addr_reg]);
-        free_reg(0);    //free base_addr_reg
-    }
-    else{
-        int *size_in_dimension = &(entry->attribute->attr.typeDescriptor->properties.arrayProperties.sizeInEachDimension[1]);
-        int size_in_dimesnion_reg = get_reg(0);
-        AST_NODE *dim_node = node->child;
+    if( entry->attribute->attr.typeDescriptor->kind == ARRAY_TYPE_DESCRIPTOR ){
+        SymbolTableEntry *formal_entry = node->semantic_value.identifierSemanticValue.symbolTableEntry;
+        int formal_dim_cnt = formal_entry->attribute->attr.typeDescriptor->properties.arrayProperties.dimension;
+        AST_NODE *ref_dim = node->child;
+        int var_part_reg = get_reg(0);
 
-        gen_expr(dim_node, ARoffset);
-        fprintf(output, "\tmv %s, %s\n", int_reg[target_addr_reg], int_reg[dim_node->place]);
-        free_reg(0); //free dim_node->place
-
-        dim_node = dim_node->rightSibling;
-        while (dim_node != NULL){
-            fprintf(output, "\tli %s, %d\n", int_reg[size_in_dimesnion_reg], *size_in_dimension);
-            size_in_dimension++;
-            fprintf(output, "\tmul %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[size_in_dimesnion_reg]);
-            gen_expr(dim_node, ARoffset);
-            fprintf(output, "\tadd %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[dim_node->place]);
-            free_reg(0); //free dim_node->place
-            dim_node = dim_node->rightSibling;
+        if (ref_dim == NULL){ //cases like func(arr)
+            fprintf(output, "\tli %s, 0\n", int_reg[var_part_reg]);
         }
-        fprintf(output, "\tslli %s, %s, 2\n", int_reg[target_addr_reg], int_reg[target_addr_reg]);
-        fprintf(output, "\tadd %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[base_addr_reg]);
-        free_reg(0); //free size_in_dimension_reg
-        free_reg(0); //free base_addr_reg
+        else{
+            gen_expr(ref_dim, ARoffset);
+            fprintf(output, "\tmv %s, %s\n", int_reg[var_part_reg], int_reg[ref_dim->place]);
+            free_reg(0); //free ref_dim->place
+            ref_dim = ref_dim->rightSibling;
+
+            int *formal_dim_size = formal_entry->attribute->attr.typeDescriptor->properties.arrayProperties.sizeInEachDimension;
+            int size_in_dimesnion_reg = get_reg(0);
+            for (int dim = 1; dim < formal_dim_cnt; dim++){
+                fprintf(output, "\tli %s, %d\n", int_reg[size_in_dimesnion_reg], formal_dim_size[dim]);
+                fprintf(output, "\tmul %s, %s, %s\n", int_reg[var_part_reg], int_reg[var_part_reg], int_reg[size_in_dimesnion_reg]);
+                if (ref_dim != NULL){
+                    gen_expr(ref_dim, ARoffset);
+                    fprintf(output, "\tadd %s, %s, %s\n", int_reg[var_part_reg], int_reg[var_part_reg], int_reg[ref_dim->place]);
+                    free_reg(0); //free ref_dim->place
+                    ref_dim = ref_dim->rightSibling;
+                }
+            }
+            free_reg(0); //free size_in_dimension_reg
+        }
+
+        fprintf(output, "\tslli %s, %s, 2\n", int_reg[var_part_reg], int_reg[var_part_reg]);
+        fprintf(output, "\tadd %s, %s, %s\n", int_reg[target_addr_reg], int_reg[target_addr_reg], int_reg[var_part_reg]);
+        free_reg(0); //free var_part_reg
     }
     return target_addr_reg;
 }
@@ -717,14 +740,26 @@ void gen_function_call(AST_NODE *stmtNode, int *ARoffset)
 
                 if( formal_param->type->properties.dataType == INT_TYPE ){
                     fprintf(output, "\tsw %s, %d(sp)\n", int_reg[actual_param->place], cur_parameter_offset + 8);
+                    free_reg(0);        //free actual_param reg
                 }
                 else{
                     fprintf(output, "\tfsw %s, %d(sp)\n", float_reg[actual_param->place], cur_parameter_offset + 8);
+                    free_reg(0);        //free actual_param reg
                 }
                 cur_parameter_offset += 4;
             }
-            else{
+            else{       //pass array into scalar
+                int address_reg;
 
+                if( actual_param->semantic_value.identifierSemanticValue.symbolTableEntry->nestingLevel == 0 ){
+                    address_reg = get_global_addr_register(actual_param, ARoffset);
+                }
+                else{
+                    address_reg = get_local_addr_register(actual_param, ARoffset);
+                }
+                fprintf(output, "\tsd %s, %d(sp)\n", int_reg[address_reg], cur_parameter_offset + 8);
+                cur_parameter_offset += 8;
+                free_reg(0);            //free address_reg
             }
             actual_param = actual_param->rightSibling;
             formal_param = formal_param->next;
